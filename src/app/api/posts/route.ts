@@ -1,3 +1,5 @@
+export const runtime = 'edge';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { getPosts, createPost } from '@/lib/db';
 import { isAdminAuthenticated } from '@/lib/auth';

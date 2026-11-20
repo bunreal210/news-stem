@@ -1,21 +1,8 @@
-import fs from 'fs';
-import path from 'path';
 import { Post, SiteConfig } from './types';
 import { extractYouTubeId, slugify } from './utils';
 
-const DATA_DIR = path.join(process.cwd(), 'data');
-const POSTS_FILE = path.join(DATA_DIR, 'posts.json');
-const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
-
-// Đảm bảo thư mục data luôn tồn tại
-function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-}
-
 // Cấu hình mặc định cho CLB STEM
-const DEFAULT_CONFIG: SiteConfig = {
+export const DEFAULT_CONFIG: SiteConfig = {
   clubName: "CLB STEM & SÁNG TẠO TRẺ",
   schoolName: "Trường THPT Chuyên / THPT Khoa Học",
   slogan: "Khơi nguồn đam mê - Chinh phục công nghệ - Sáng tạo tương lai",
@@ -27,8 +14,8 @@ const DEFAULT_CONFIG: SiteConfig = {
   address: "Phòng Thực hành STEM - Tầng 3 Nhà A, Trường THPT",
 };
 
-// Dữ liệu mẫu ban đầu để web có ngay giao diện sống động
-const INITIAL_POSTS: Post[] = [
+// Dữ liệu mẫu ban đầu
+export const INITIAL_POSTS: Post[] = [
   {
     id: "stem-post-1",
     title: "Đội tuyển STEM trường xuất sắc giành Huy chương Vàng tại Hội thi Sáng chế Robot 2026",
@@ -151,48 +138,33 @@ Cánh tay robot được điều khiển thông qua 4 động cơ Servo MG996R c
   }
 ];
 
-export function getPosts(): Post[] {
-  ensureDataDir();
-  if (!fs.existsSync(POSTS_FILE)) {
-    fs.writeFileSync(POSTS_FILE, JSON.stringify(INITIAL_POSTS, null, 2), 'utf-8');
-    return INITIAL_POSTS;
-  }
+// In-memory posts array for zero-dependency edge compatibility
+let memoryPosts: Post[] = [...INITIAL_POSTS];
 
-  try {
-    const raw = fs.readFileSync(POSTS_FILE, 'utf-8');
-    return JSON.parse(raw);
-  } catch (err) {
-    console.error('Lỗi khi đọc file posts.json:', err);
-    return INITIAL_POSTS;
-  }
+export function getPosts(): Post[] {
+  return memoryPosts;
 }
 
 export function savePosts(posts: Post[]) {
-  ensureDataDir();
-  fs.writeFileSync(POSTS_FILE, JSON.stringify(posts, null, 2), 'utf-8');
+  memoryPosts = posts;
 }
 
 export function getPostBySlug(slug: string): Post | undefined {
-  const posts = getPosts();
-  return posts.find((p) => p.slug === slug);
+  return memoryPosts.find((p) => p.slug === slug);
 }
 
 export function getPostById(id: string): Post | undefined {
-  const posts = getPosts();
-  return posts.find((p) => p.id === id);
+  return memoryPosts.find((p) => p.id === id);
 }
 
 export function createPost(data: Omit<Post, 'id' | 'createdAt' | 'updatedAt' | 'views'>): Post {
-  const posts = getPosts();
   const id = `post-${Date.now()}`;
   const now = new Date().toISOString();
   
-  // Tự động tạo slug nếu chưa có hoặc cập nhật từ title
   let slug = data.slug || slugify(data.title);
-  // Đảm bảo slug là duy nhất
   let finalSlug = slug;
   let counter = 1;
-  while (posts.some(p => p.slug === finalSlug)) {
+  while (memoryPosts.some(p => p.slug === finalSlug)) {
     finalSlug = `${slug}-${counter}`;
     counter++;
   }
@@ -209,22 +181,20 @@ export function createPost(data: Omit<Post, 'id' | 'createdAt' | 'updatedAt' | '
     updatedAt: now,
   };
 
-  posts.unshift(newPost);
-  savePosts(posts);
+  memoryPosts.unshift(newPost);
   return newPost;
 }
 
 export function updatePost(id: string, updates: Partial<Post>): Post | null {
-  const posts = getPosts();
-  const index = posts.findIndex((p) => p.id === id);
+  const index = memoryPosts.findIndex((p) => p.id === id);
   if (index === -1) return null;
 
-  const oldPost = posts[index];
+  const oldPost = memoryPosts[index];
   let finalSlug = oldPost.slug;
   if (updates.title && updates.title !== oldPost.title && !updates.slug) {
     finalSlug = slugify(updates.title);
     let counter = 1;
-    while (posts.some(p => p.id !== id && p.slug === finalSlug)) {
+    while (memoryPosts.some(p => p.id !== id && p.slug === finalSlug)) {
       finalSlug = `${slugify(updates.title)}-${counter}`;
       counter++;
     }
@@ -244,37 +214,24 @@ export function updatePost(id: string, updates: Partial<Post>): Post | null {
     updatedAt: new Date().toISOString(),
   };
 
-  posts[index] = updated;
-  savePosts(posts);
+  memoryPosts[index] = updated;
   return updated;
 }
 
 export function deletePost(id: string): boolean {
-  const posts = getPosts();
-  const filtered = posts.filter((p) => p.id !== id);
-  if (filtered.length === posts.length) return false;
-  savePosts(filtered);
+  const filtered = memoryPosts.filter((p) => p.id !== id);
+  if (filtered.length === memoryPosts.length) return false;
+  memoryPosts = filtered;
   return true;
 }
 
 export function incrementViews(id: string): void {
-  const posts = getPosts();
-  const post = posts.find((p) => p.id === id);
+  const post = memoryPosts.find((p) => p.id === id);
   if (post) {
     post.views = (post.views || 0) + 1;
-    savePosts(posts);
   }
 }
 
 export function getSiteConfig(): SiteConfig {
-  ensureDataDir();
-  if (!fs.existsSync(CONFIG_FILE)) {
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify(DEFAULT_CONFIG, null, 2), 'utf-8');
-    return DEFAULT_CONFIG;
-  }
-  try {
-    return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8'));
-  } catch {
-    return DEFAULT_CONFIG;
-  }
+  return DEFAULT_CONFIG;
 }

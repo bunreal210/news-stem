@@ -1,6 +1,3 @@
-import path from 'path';
-import fs from 'fs';
-
 interface R2Bucket {
   put: (key: string, value: any, options?: any) => Promise<any>;
   get: (key: string) => Promise<any>;
@@ -23,11 +20,13 @@ function getR2Binding(): R2Bucket | null {
 }
 
 /**
- * Tải file lên Cloudflare R2 (hoặc local fallback nếu đang chạy dev)
+ * Tải file lên Cloudflare R2 (hoặc base64 fallback)
  */
 export async function uploadImageFile(file: File): Promise<string> {
-  const ext = path.extname(file.name) || '.jpg';
-  const cleanName = path.basename(file.name, ext).replace(/[^a-zA-Z0-9_-]/g, '');
+  const dotIndex = file.name.lastIndexOf('.');
+  const ext = dotIndex !== -1 ? file.name.substring(dotIndex) : '.jpg';
+  const rawBase = dotIndex !== -1 ? file.name.substring(0, dotIndex) : file.name;
+  const cleanName = rawBase.replace(/[^a-zA-Z0-9_-]/g, '');
   const filename = `${Date.now()}-${cleanName}${ext}`;
 
   const r2 = getR2Binding();
@@ -41,26 +40,20 @@ export async function uploadImageFile(file: File): Promise<string> {
       },
     });
 
-    // Nếu bạn có gắn Custom Domain cho R2 (ví dụ: media.clbstem.com)
     const publicDomain = process.env.NEXT_PUBLIC_R2_URL;
     if (publicDomain) {
       return `${publicDomain.replace(/\/$/, '')}/${filename}`;
     }
 
-    // Hoặc trả về qua endpoint phục vụ ảnh
     return `/api/media/${filename}`;
   }
 
-  // 2. Chế độ cục bộ (Local Development)
-  const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads');
-  if (!fs.existsSync(UPLOAD_DIR)) {
-    fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+  // 2. Chế độ Edge / Local: chuyển sang Data URL hoặc placeholder
+  try {
+    const buffer = await file.arrayBuffer();
+    const base64 = Buffer.from(buffer).toString('base64');
+    return `data:${file.type || 'image/jpeg'};base64,${base64}`;
+  } catch {
+    return `https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80`;
   }
-
-  const bytes = await file.arrayBuffer();
-  const buffer = Buffer.from(bytes);
-  const filePath = path.join(UPLOAD_DIR, filename);
-  fs.writeFileSync(filePath, buffer);
-
-  return `/uploads/${filename}`;
 }

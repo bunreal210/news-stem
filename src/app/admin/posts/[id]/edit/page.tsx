@@ -10,6 +10,7 @@ interface EditPostPageProps {
   }>;
 }
 
+export const runtime = 'edge';
 export const revalidate = 0;
 
 export default async function EditPostPage({ params }: EditPostPageProps) {
