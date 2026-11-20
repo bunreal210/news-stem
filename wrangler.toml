@@ -1,0 +1,24 @@
+# ========================================================
+# CẤU HÌNH CLOUDFLARE FULL ECOSYSTEM (PAGES + D1 + R2)
+# ========================================================
+
+name = "stem-club-news"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = ".vercel/output/static"
+
+# 1. Cơ sở dữ liệu Cloudflare D1 (Serverless SQL)
+[[d1_databases]]
+binding = "DB"
+database_name = "stem-club-db"
+database_id = "baf37a12-597a-40dc-8144-010778f66ced"
+
+# 2. Lưu trữ tệp ảnh Cloudflare R2 (Object Storage)
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "stem-club-media" # Tên Bucket ảnh trên Cloudflare R2
+
+# 3. Biến môi trường
+[vars]
+ADMIN_USERNAME = "admin"
+NEXT_PUBLIC_SITE_NAME = "CLB STEM - Sáng Tạo Trẻ"
