@@ -58,15 +58,20 @@ export default function AdminDashboardPage() {
   const [docUrl, setDocUrl] = useState('#');
   const [addingDoc, setAddingDoc] = useState(false);
 
+  // D1 Database Connection Status
+  const [d1Status, setD1Status] = useState<'checking' | 'connected' | 'disconnected'>('checking');
+  const [d1Error, setD1Error] = useState<string | null>(null);
+
   const router = useRouter();
 
   // Tải danh sách bài viết & văn bản
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [resPosts, resDocs] = await Promise.all([
+      const [resPosts, resDocs, resStatus] = await Promise.all([
         fetch('/api/posts?status=all'),
         fetch('/api/documents'),
+        fetch('/api/system/status'),
       ]);
 
       if (resPosts.status === 401) {
@@ -81,8 +86,17 @@ export default function AdminDashboardPage() {
         const dataDocs = await resDocs.json();
         setDocuments(dataDocs.documents || []);
       }
+
+      if (resStatus.ok) {
+        const dataStatus = await resStatus.json();
+        setD1Status(dataStatus.d1Connected ? 'connected' : 'disconnected');
+        setD1Error(dataStatus.d1Error || null);
+      } else {
+        setD1Status('disconnected');
+      }
     } catch (err) {
       console.error(err);
+      setD1Status('disconnected');
     } finally {
       setLoading(false);
     }
@@ -236,6 +250,20 @@ export default function AdminDashboardPage() {
                 <span>Trung Tâm Quản Trị Cổng BSSRC</span>
                 <span className="text-slate-300">•</span>
                 <span className="text-slate-500 font-medium lowercase">admin session active</span>
+                <span className="text-slate-300">•</span>
+                {d1Status === 'connected' ? (
+                  <span className="text-emerald-700 font-bold lowercase flex items-center gap-1">
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>D1 connected</span>
+                  </span>
+                ) : d1Status === 'checking' ? (
+                  <span className="text-slate-400 font-medium lowercase">checking db...</span>
+                ) : (
+                  <span className="text-red-600 font-bold lowercase flex items-center gap-1 animate-pulse">
+                    <AlertTriangle className="w-3.5 h-3.5 text-red-600" />
+                    <span>D1 not bound</span>
+                  </span>
+                )}
               </div>
               <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-1.5 font-tech tracking-tight">
                 Bảng Điều Khiển Nội Dung & Hệ Thống
@@ -250,10 +278,41 @@ export default function AdminDashboardPage() {
               <ShieldCheck className="w-5 h-5 text-blue-600" />
               <div className="text-left">
                 <div className="text-[11px] font-bold text-slate-800">THPT Bắc Đông Quan</div>
-                <div className="text-[10px] text-slate-500">Cổng Thông Tin Điện Tử</div>
+                <div className="text-[10px] text-slate-500">
+                  {d1Status === 'connected' ? 'Cơ sở dữ liệu: D1 Online' : 'CSDL: Cần kiểm tra'}
+                </div>
               </div>
             </div>
           </div>
+
+          {/* CẢNH BÁO CHƯA GẮN CLOUDFLARE D1 DATABASE */}
+          {d1Status === 'disconnected' && (
+            <div className="p-4 sm:p-5 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-900 shadow-sm space-y-3 animate-fadeIn">
+              <div className="flex items-center gap-2.5 font-extrabold text-sm sm:text-base text-amber-900">
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 animate-bounce" />
+                <span>CHÚ Ý QUAN TRỌNG: Chưa kết nối Database Cloudflare D1 trên Cloudflare Pages!</span>
+              </div>
+              <p className="text-xs sm:text-sm text-amber-800 leading-relaxed">
+                Hệ thống chưa tìm thấy biến liên kết <code className="bg-amber-100 px-1.5 py-0.5 rounded font-mono font-bold text-amber-900">DB</code> trong môi trường Cloudflare Pages. Vì vậy, các bài viết hoặc tài liệu tạo mới <strong>chưa được lưu vào Database D1</strong>.
+              </p>
+              <div className="p-3.5 bg-white/90 rounded-xl border border-amber-200 text-xs text-slate-800 space-y-2">
+                <p className="font-bold text-amber-900">👉 Hướng dẫn khắc phục trong 1 phút trên Cloudflare Dashboard:</p>
+                <ol className="list-decimal list-inside space-y-1.5 text-slate-700 leading-relaxed">
+                  <li>Truy cập <a href="https://dash.cloudflare.com" target="_blank" rel="noreferrer" className="text-blue-600 font-bold underline">dash.cloudflare.com</a> → Chọn <strong>Workers & Pages</strong> → Chọn project <strong>news-stem</strong>.</li>
+                  <li>Chuyển sang tab <strong>Settings</strong> → Chọn mục <strong>Functions</strong> ở thanh menu bên trái.</li>
+                  <li>Cuộn xuống phần <strong>D1 database bindings</strong> → Bấm <strong>Add binding</strong>.</li>
+                  <li>Nhập chính xác:
+                    <div className="ml-5 mt-1 space-y-0.5 font-mono text-[11px] text-slate-900">
+                      • <strong>Variable name:</strong> <span className="text-blue-700 font-bold">DB</span><br />
+                      • <strong>D1 database:</strong> chọn <span className="text-blue-700 font-bold">stem-club-db</span> (ID: baf37a12-597a-40dc-8144-010778f66ced)
+                    </div>
+                  </li>
+                  <li>Bấm <strong>Save</strong> để lưu cấu hình.</li>
+                  <li>Chuyển sang tab <strong>Deployments</strong> → Tại bản build gần nhất, bấm nút <strong>···</strong> bên phải và chọn <strong>Retry deployment</strong>.</li>
+                </ol>
+              </div>
+            </div>
+          )}
 
           {/* DÃY NÚT CHỨC NĂNG TẬP TRUNG TẠI 1 CHỖ (UNIFIED ACTION TOOLBAR) */}
           <div className="bg-slate-50/90 border border-slate-200/90 rounded-2xl p-3 sm:p-4 flex flex-wrap items-center gap-2.5 sm:gap-3">

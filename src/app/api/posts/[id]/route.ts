@@ -40,15 +40,17 @@ export async function PUT(
       return NextResponse.json({ error: 'Không tìm thấy bài viết để cập nhật.' }, { status: 404 });
     }
 
-    // Revalidate public pages and dashboard
-    revalidatePath('/', 'layout');
-    revalidatePath('/posts');
-    revalidatePath('/admin/dashboard');
+    try {
+      revalidatePath('/', 'layout');
+      revalidatePath('/posts');
+      revalidatePath('/admin/dashboard');
+    } catch {}
 
     return NextResponse.json({ success: true, post: updated });
   } catch (error) {
-    console.error('Lỗi cập nhật bài viết:', error);
-    return NextResponse.json({ error: 'Lỗi máy chủ.' }, { status: 500 });
+    console.error('[PUT /api/posts/[id]] CRITICAL ERROR:', error);
+    const errMsg = error instanceof Error ? error.message : 'Lỗi máy chủ khi cập nhật bài viết.';
+    return NextResponse.json({ error: errMsg }, { status: 500 });
   }
 }
 
@@ -68,15 +70,17 @@ export async function DELETE(
       return NextResponse.json({ error: 'Không tìm thấy bài viết để xóa.' }, { status: 404 });
     }
 
-    // Revalidate public pages and dashboard
-    revalidatePath('/', 'layout');
-    revalidatePath('/posts');
-    revalidatePath('/admin/dashboard');
+    try {
+      revalidatePath('/', 'layout');
+      revalidatePath('/posts');
+      revalidatePath('/admin/dashboard');
+    } catch {}
 
     return NextResponse.json({ success: true, message: 'Đã xóa bài viết thành công.' });
   } catch (error) {
-    console.error('Lỗi xóa bài viết:', error);
-    return NextResponse.json({ error: 'Lỗi máy chủ.' }, { status: 500 });
+    console.error('[DELETE /api/posts/[id]] CRITICAL ERROR:', error);
+    const errMsg = error instanceof Error ? error.message : 'Lỗi máy chủ khi xóa bài viết.';
+    return NextResponse.json({ error: errMsg }, { status: 500 });
   }
 }
 

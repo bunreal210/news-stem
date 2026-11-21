@@ -28,7 +28,8 @@ export async function DELETE(
 
     return NextResponse.json({ success: true, message: 'Đã xóa văn bản thành công.' });
   } catch (error) {
-    console.error('Lỗi xóa tài liệu:', error);
-    return NextResponse.json({ error: 'Lỗi máy chủ.' }, { status: 500 });
+    console.error('[DELETE /api/documents/[id]] CRITICAL ERROR:', error);
+    const errMsg = error instanceof Error ? error.message : 'Lỗi máy chủ khi xóa văn bản.';
+    return NextResponse.json({ error: errMsg }, { status: 500 });
   }
 }

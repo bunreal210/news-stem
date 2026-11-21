@@ -66,8 +66,9 @@ export default function PostForm({ initialData, isEdit = false, defaultCategory 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isAuthValid, setIsAuthValid] = useState<boolean | null>(null);
+  const [isD1Connected, setIsD1Connected] = useState<boolean | null>(null);
 
-  // Kiểm tra phiên đăng nhập admin khi mở form
+  // Kiểm tra phiên đăng nhập admin và kết nối D1 khi mở form
   useEffect(() => {
     fetch('/api/auth/check')
       .then((res) => res.json())
@@ -75,8 +76,15 @@ export default function PostForm({ initialData, isEdit = false, defaultCategory 
         setIsAuthValid(Boolean(data.authenticated));
       })
       .catch(() => {
-        setIsAuthValid(true); // không block nếu offline check
+        setIsAuthValid(true);
       });
+
+    fetch('/api/system/status')
+      .then((res) => res.json())
+      .then((data) => {
+        setIsD1Connected(Boolean(data.d1Connected));
+      })
+      .catch(() => {});
   }, []);
 
   // Live extracted YouTube ID
@@ -255,14 +263,22 @@ export default function PostForm({ initialData, isEdit = false, defaultCategory 
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || 'Có lỗi xảy ra khi lưu bài viết.');
+        setError(data.error || 'Có lỗi xảy ra khi lưu bài viết. Vui lòng thử lại.');
         setLoading(false);
         return;
       }
 
-      setSuccess(isEdit ? 'Cập nhật bài viết thành công!' : 'Xuất bản bài viết thành công!');
+      // Kiểm tra D1 connection status
+      if (data.d1_connected === false) {
+        setError('⚠️ Cảnh báo: Bài viết chỉ được lưu vào bộ nhớ tạm (D1 chưa kết nối). Dữ liệu có thể mất khi hệ thống khởi động lại.');
+        setLoading(false);
+        return;
+      }
+
+      setSuccess(isEdit ? 'Cập nhật bài viết thành công! Đã lưu vào cơ sở dữ liệu.' : 'Xuất bản bài viết thành công! Đã lưu vào cơ sở dữ liệu.');
       setTimeout(() => {
         router.push('/admin/dashboard');
+        router.refresh();
       }, 800);
     } catch {
       setError('Lỗi kết nối máy chủ. Vui lòng kiểm tra lại mạng hoặc thử lại.');
@@ -311,6 +327,24 @@ export default function PostForm({ initialData, isEdit = false, defaultCategory 
             className="px-3.5 py-1.5 rounded-xl bg-amber-600 text-white font-bold text-xs hover:bg-amber-700 whitespace-nowrap shadow-xs"
           >
             Đăng nhập lại
+          </Link>
+        </div>
+      )}
+
+      {/* Cảnh báo D1 chưa kết nối */}
+      {isD1Connected === false && (
+        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 text-amber-900 text-xs sm:text-sm flex items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-5 h-5 shrink-0 text-amber-600" />
+            <span>
+              <strong>Cảnh báo D1:</strong> Cloudflare Pages chưa được gán biến liên kết <code>DB</code>. Hãy cấu hình D1 binding trên Cloudflare Dashboard để bài viết được lưu vĩnh viễn!
+            </span>
+          </div>
+          <Link
+            href="/admin/dashboard"
+            className="px-3.5 py-1.5 rounded-xl bg-amber-600 text-white font-bold text-xs hover:bg-amber-700 whitespace-nowrap shadow-xs"
+          >
+            Xem hướng dẫn
           </Link>
         </div>
       )}

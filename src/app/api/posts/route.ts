@@ -2,7 +2,7 @@ export const runtime = 'edge';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import { getPosts, createPost } from '@/lib/db';
+import { getPosts, createPost, getD1 } from '@/lib/db';
 import { isAdminAuthenticated } from '@/lib/auth';
 
 export async function GET(req: NextRequest) {
@@ -82,6 +82,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Kiểm tra D1 binding trước khi tạo bài
+    const d1 = getD1();
+    const d1Available = !!d1;
+
     const newPost = await createPost({
       title,
       slug: '',
@@ -100,13 +104,25 @@ export async function POST(req: NextRequest) {
     });
 
     // Revalidate public portal and admin pages immediately
-    revalidatePath('/', 'layout');
-    revalidatePath('/posts');
-    revalidatePath('/admin/dashboard');
+    try {
+      revalidatePath('/', 'layout');
+      revalidatePath('/posts');
+      revalidatePath('/admin/dashboard');
+    } catch (revalErr) {
+      console.warn('[POST /api/posts] revalidatePath warning:', revalErr);
+    }
 
-    return NextResponse.json({ success: true, post: newPost }, { status: 201 });
+    return NextResponse.json({ 
+      success: true, 
+      post: newPost,
+      d1_connected: d1Available,
+      message: d1Available 
+        ? `Bài viết "${newPost.title}" đã được lưu vào cơ sở dữ liệu thành công.`
+        : `Bài viết "${newPost.title}" đã được lưu vào bộ nhớ tạm (D1 chưa kết nối).`
+    }, { status: 201 });
   } catch (error) {
-    console.error('Lỗi khi tạo bài viết mới:', error);
-    return NextResponse.json({ error: 'Có lỗi xảy ra khi tạo bài viết.' }, { status: 500 });
+    console.error('[POST /api/posts] CRITICAL ERROR:', error);
+    const errMsg = error instanceof Error ? error.message : 'Có lỗi xảy ra khi tạo bài viết.';
+    return NextResponse.json({ error: errMsg }, { status: 500 });
   }
 }

@@ -46,7 +46,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, document: newDoc }, { status: 201 });
   } catch (error) {
-    console.error('Lỗi tạo tài liệu:', error);
-    return NextResponse.json({ error: 'Lỗi khi lưu tài liệu.' }, { status: 500 });
+    console.error('[POST /api/documents] CRITICAL ERROR:', error);
+    const errMsg = error instanceof Error ? error.message : 'Lỗi khi lưu tài liệu.';
+    return NextResponse.json({ error: errMsg }, { status: 500 });
   }
 }
