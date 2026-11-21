@@ -86,7 +86,7 @@ export default async function HomePage() {
             </div>
 
             {/* Bài viết chính nổi bật nhất (Lead Story) */}
-            {leadPost && (
+            {leadPost ? (
               <article className="group bg-white rounded-2xl border border-slate-200/90 overflow-hidden shadow-xs hover:border-blue-300 hover:shadow-md transition-all">
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-0">
                   <div className="md:col-span-7 relative overflow-hidden aspect-[16/10] md:aspect-auto">
@@ -137,6 +137,10 @@ export default async function HomePage() {
                   </div>
                 </div>
               </article>
+            ) : (
+              <div className="bg-white rounded-2xl border border-slate-200/90 p-8 text-center text-slate-400 text-xs sm:text-sm">
+                Chưa có bài viết tin tức nào trên hệ thống.
+              </div>
             )}
 
             {/* 3 Bài tiêu điểm phụ (Sub-featured 3 columns) */}
@@ -204,46 +208,52 @@ export default async function HomePage() {
               </div>
 
               <div className="p-3 divide-y divide-slate-100">
-                {announcements.map((tb) => {
-                  const dateObj = new Date(tb.createdAt);
-                  const day = String(dateObj.getDate()).padStart(2, '0');
-                  const month = `T${dateObj.getMonth() + 1}`;
+                {announcements.length > 0 ? (
+                  announcements.map((tb) => {
+                    const dateObj = new Date(tb.createdAt);
+                    const day = String(dateObj.getDate()).padStart(2, '0');
+                    const month = `T${dateObj.getMonth() + 1}`;
 
-                  return (
-                    <article key={tb.id} className="py-2.5 first:pt-1 last:pb-1 flex items-start gap-3 group">
-                      {/* Date Badge */}
-                      <div className="shrink-0 w-11 text-center rounded-lg bg-red-50 border border-red-200 overflow-hidden">
-                        <span className="block bg-red-600 text-white text-[10px] font-bold py-0.5 leading-none">
-                          {month}
-                        </span>
-                        <span className="block text-sm font-black text-slate-800 py-1 leading-none font-tech">
-                          {day}
-                        </span>
-                      </div>
-
-                      {/* Content */}
-                      <div className="flex-1 min-w-0">
-                        {tb.isUrgent && (
-                          <span className="inline-block bg-red-100 text-red-700 text-[9px] font-extrabold px-1.5 py-0.2 rounded mr-1.5 uppercase">
-                            Khẩn
+                    return (
+                      <article key={tb.id} className="py-2.5 first:pt-1 last:pb-1 flex items-start gap-3 group">
+                        {/* Date Badge */}
+                        <div className="shrink-0 w-11 text-center rounded-lg bg-red-50 border border-red-200 overflow-hidden">
+                          <span className="block bg-red-600 text-white text-[10px] font-bold py-0.5 leading-none">
+                            {month}
                           </span>
-                        )}
-                        <Link
-                          href={`/posts/${tb.slug}`}
-                          className="text-xs font-bold text-slate-800 group-hover:text-red-600 transition-colors line-clamp-2 leading-snug"
-                        >
-                          {tb.title}
-                        </Link>
-                        {tb.attachments && tb.attachments.length > 0 && (
-                          <div className="flex items-center gap-1 text-[10px] text-slate-500 mt-1">
-                            <FileText className="w-3 h-3 text-red-500" />
-                            <span>Kèm {tb.attachments.length} tài liệu tải về</span>
-                          </div>
-                        )}
-                      </div>
-                    </article>
-                  );
-                })}
+                          <span className="block text-sm font-black text-slate-800 py-1 leading-none font-tech">
+                            {day}
+                          </span>
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 min-w-0">
+                          {tb.isUrgent && (
+                            <span className="inline-block bg-red-100 text-red-700 text-[9px] font-extrabold px-1.5 py-0.2 rounded mr-1.5 uppercase">
+                              Khẩn
+                            </span>
+                          )}
+                          <Link
+                            href={`/posts/${tb.slug}`}
+                            className="text-xs font-bold text-slate-800 group-hover:text-red-600 transition-colors line-clamp-2 leading-snug"
+                          >
+                            {tb.title}
+                          </Link>
+                          {tb.attachments && tb.attachments.length > 0 && (
+                            <div className="flex items-center gap-1 text-[10px] text-slate-500 mt-1">
+                              <FileText className="w-3 h-3 text-red-500" />
+                              <span>Kèm {tb.attachments.length} tài liệu tải về</span>
+                            </div>
+                          )}
+                        </div>
+                      </article>
+                    );
+                  })
+                ) : (
+                  <div className="py-6 text-center text-slate-400 text-xs">
+                    Chưa có thông báo nào từ ban quản trị.
+                  </div>
+                )}
               </div>
             </div>
 
@@ -325,50 +335,56 @@ export default async function HomePage() {
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {remainingNewsPosts.slice(0, 6).map((post) => (
-              <article key={post.id} className="group flex flex-col justify-between rounded-xl border border-slate-100 hover:border-blue-200 p-3 transition-colors bg-slate-50/40">
-                <div>
-                  <div className="relative aspect-[16/10] rounded-lg overflow-hidden mb-3 border border-slate-200/60">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={post.thumbnail}
-                      alt={post.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
+          {remainingNewsPosts.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {remainingNewsPosts.slice(0, 6).map((post) => (
+                <article key={post.id} className="group flex flex-col justify-between rounded-xl border border-slate-100 hover:border-blue-200 p-3 transition-colors bg-slate-50/40">
+                  <div>
+                    <div className="relative aspect-[16/10] rounded-lg overflow-hidden mb-3 border border-slate-200/60">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={post.thumbnail}
+                        alt={post.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2 text-[11px] text-slate-500 mb-1.5">
+                      <Calendar className="w-3 h-3 text-slate-400" />
+                      <span>{formatDate(post.createdAt)}</span>
+                      <span>•</span>
+                      <span className="text-slate-600">{post.author}</span>
+                    </div>
+
+                    <h3 className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition-colors line-clamp-2 leading-snug">
+                      <Link href={`/posts/${post.slug}`}>
+                        {post.title}
+                      </Link>
+                    </h3>
+
+                    <p className="text-xs text-slate-600 line-clamp-2 mt-1.5 leading-relaxed">
+                      {post.summary}
+                    </p>
                   </div>
 
-                  <div className="flex items-center gap-2 text-[11px] text-slate-500 mb-1.5">
-                    <Calendar className="w-3 h-3 text-slate-400" />
-                    <span>{formatDate(post.createdAt)}</span>
-                    <span>•</span>
-                    <span className="text-slate-600">{post.author}</span>
-                  </div>
-
-                  <h3 className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition-colors line-clamp-2 leading-snug">
-                    <Link href={`/posts/${post.slug}`}>
-                      {post.title}
+                  <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                    <span className="text-slate-400 text-[11px]">{post.views} lượt xem</span>
+                    <Link
+                      href={`/posts/${post.slug}`}
+                      className="font-bold text-blue-600 hover:underline inline-flex items-center gap-1"
+                    >
+                      <span>Xem tiếp</span>
+                      <ArrowRight className="w-3 h-3" />
                     </Link>
-                  </h3>
-
-                  <p className="text-xs text-slate-600 line-clamp-2 mt-1.5 leading-relaxed">
-                    {post.summary}
-                  </p>
-                </div>
-
-                <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between text-xs">
-                  <span className="text-slate-400 text-[11px]">{post.views} lượt xem</span>
-                  <Link
-                    href={`/posts/${post.slug}`}
-                    className="font-bold text-blue-600 hover:underline inline-flex items-center gap-1"
-                  >
-                    <span>Xem tiếp</span>
-                    <ArrowRight className="w-3 h-3" />
-                  </Link>
-                </div>
-              </article>
-            ))}
-          </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="py-10 text-center text-slate-400 text-xs bg-slate-50/60 rounded-2xl border border-slate-200/60">
+              Chưa có thêm tin tức hoặc bài viết nào khác.
+            </div>
+          )}
 
         </div>
       </section>
@@ -406,34 +422,42 @@ export default async function HomePage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {documents.map((doc, idx) => (
-                  <tr key={doc.id} className="hover:bg-blue-50/40 transition-colors">
-                    <td className="py-2.5 px-3 text-center text-slate-500 font-semibold">{idx + 1}</td>
-                    <td className="py-2.5 px-3 font-semibold text-slate-900">
-                      <span>{doc.title}</span>
-                      <span className="sm:hidden block text-[10px] text-slate-400 mt-0.5">
-                        {doc.code} • {doc.publishDate}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-3 text-slate-600 hidden sm:table-cell">{doc.code}</td>
-                    <td className="py-2.5 px-3 hidden md:table-cell">
-                      <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[10px] font-semibold">
-                        {doc.category}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-3 text-slate-500 hidden sm:table-cell">{doc.publishDate}</td>
-                    <td className="py-2.5 px-3 text-center">
-                      <a
-                        href={doc.downloadUrl}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold border border-blue-200 transition-colors"
-                        title={`Tải file ${doc.fileType} (${doc.fileSize})`}
-                      >
-                        <Download className="w-3 h-3" />
-                        <span>{doc.fileType} ({doc.fileSize})</span>
-                      </a>
+                {documents.length > 0 ? (
+                  documents.map((doc, idx) => (
+                    <tr key={doc.id} className="hover:bg-blue-50/40 transition-colors">
+                      <td className="py-2.5 px-3 text-center text-slate-500 font-semibold">{idx + 1}</td>
+                      <td className="py-2.5 px-3 font-semibold text-slate-900">
+                        <span>{doc.title}</span>
+                        <span className="sm:hidden block text-[10px] text-slate-400 mt-0.5">
+                          {doc.code} • {doc.publishDate}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 text-slate-600 hidden sm:table-cell">{doc.code}</td>
+                      <td className="py-2.5 px-3 hidden md:table-cell">
+                        <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[10px] font-semibold">
+                          {doc.category}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 text-slate-500 hidden sm:table-cell">{doc.publishDate}</td>
+                      <td className="py-2.5 px-3 text-center">
+                        <a
+                          href={doc.downloadUrl}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold border border-blue-200 transition-colors"
+                          title={`Tải file ${doc.fileType} (${doc.fileSize})`}
+                        >
+                          <Download className="w-3 h-3" />
+                          <span>{doc.fileType} ({doc.fileSize})</span>
+                        </a>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center text-slate-400 text-xs">
+                      Chưa có văn bản hoặc tài liệu nào được ban hành.
                     </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
