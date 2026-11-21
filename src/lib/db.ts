@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { Post, SiteConfig, ScheduleEvent, DocumentResource } from './types';
 import { extractYouTubeId, slugify } from './utils';
 
@@ -356,29 +358,72 @@ Ban Quản trị Phòng Thực hành STEM thông báo lịch tạm dừng mượ
   }
 ];
 
-// In-memory posts array for zero-dependency edge compatibility
-let memoryPosts: Post[] = [...INITIAL_POSTS];
-let memorySchedule: ScheduleEvent[] = [...INITIAL_SCHEDULE];
-let memoryDocuments: DocumentResource[] = [...INITIAL_DOCUMENTS];
+// Path to persistent data storage
+const DATA_DIR = path.join(process.cwd(), 'data');
+const POSTS_FILE = path.join(DATA_DIR, 'posts.json');
+const DOCUMENTS_FILE = path.join(DATA_DIR, 'documents.json');
+const SCHEDULE_FILE = path.join(DATA_DIR, 'schedule.json');
+
+function ensureDataDir() {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+  } catch (err) {
+    // ignore
+  }
+}
+
+// Global cache attached to globalThis to ensure sharing across modules in the same runtime
+const globalStore = globalThis as unknown as {
+  __POSTS_CACHE__?: Post[];
+  __DOCUMENTS_CACHE__?: DocumentResource[];
+  __SCHEDULE_CACHE__?: ScheduleEvent[];
+};
 
 export function getPosts(): Post[] {
-  return memoryPosts;
+  try {
+    ensureDataDir();
+    if (fs.existsSync(POSTS_FILE)) {
+      const raw = fs.readFileSync(POSTS_FILE, 'utf-8');
+      const data = JSON.parse(raw);
+      if (Array.isArray(data) && data.length > 0) {
+        globalStore.__POSTS_CACHE__ = data;
+        return data;
+      }
+    }
+    // If file doesn't exist, seed with INITIAL_POSTS
+    savePosts(INITIAL_POSTS);
+    return [...INITIAL_POSTS];
+  } catch (err) {
+    if (globalStore.__POSTS_CACHE__) return globalStore.__POSTS_CACHE__;
+    return [...INITIAL_POSTS];
+  }
 }
 
 export function savePosts(posts: Post[]) {
-  memoryPosts = posts;
+  globalStore.__POSTS_CACHE__ = posts;
+  try {
+    ensureDataDir();
+    fs.writeFileSync(POSTS_FILE, JSON.stringify(posts, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('Failed to write posts to file:', err);
+  }
 }
 
 export function getPostBySlug(slug: string): Post | undefined {
-  return memoryPosts.find((p) => p.slug === slug);
+  const posts = getPosts();
+  return posts.find((p) => p.slug === slug);
 }
 
 export function getPostById(id: string): Post | undefined {
-  return memoryPosts.find((p) => p.id === id);
+  const posts = getPosts();
+  return posts.find((p) => p.id === id);
 }
 
 export function getAnnouncements(): Post[] {
-  return memoryPosts
+  const posts = getPosts();
+  return posts
     .filter((p) => p.status === 'published' && p.category === 'Thong-bao')
     .sort((a, b) => {
       if (a.isPinned && !b.isPinned) return -1;
@@ -388,34 +433,89 @@ export function getAnnouncements(): Post[] {
 }
 
 export function getScheduleEvents(): ScheduleEvent[] {
-  return memorySchedule;
+  try {
+    ensureDataDir();
+    if (fs.existsSync(SCHEDULE_FILE)) {
+      const raw = fs.readFileSync(SCHEDULE_FILE, 'utf-8');
+      const data = JSON.parse(raw);
+      if (Array.isArray(data) && data.length > 0) {
+        globalStore.__SCHEDULE_CACHE__ = data;
+        return data;
+      }
+    }
+    saveSchedule(INITIAL_SCHEDULE);
+    return [...INITIAL_SCHEDULE];
+  } catch (err) {
+    if (globalStore.__SCHEDULE_CACHE__) return globalStore.__SCHEDULE_CACHE__;
+    return [...INITIAL_SCHEDULE];
+  }
+}
+
+export function saveSchedule(schedule: ScheduleEvent[]) {
+  globalStore.__SCHEDULE_CACHE__ = schedule;
+  try {
+    ensureDataDir();
+    fs.writeFileSync(SCHEDULE_FILE, JSON.stringify(schedule, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('Failed to write schedule to file:', err);
+  }
 }
 
 export function getDocumentResources(): DocumentResource[] {
-  return memoryDocuments;
+  try {
+    ensureDataDir();
+    if (fs.existsSync(DOCUMENTS_FILE)) {
+      const raw = fs.readFileSync(DOCUMENTS_FILE, 'utf-8');
+      const data = JSON.parse(raw);
+      if (Array.isArray(data) && data.length > 0) {
+        globalStore.__DOCUMENTS_CACHE__ = data;
+        return data;
+      }
+    }
+    saveDocuments(INITIAL_DOCUMENTS);
+    return [...INITIAL_DOCUMENTS];
+  } catch (err) {
+    if (globalStore.__DOCUMENTS_CACHE__) return globalStore.__DOCUMENTS_CACHE__;
+    return [...INITIAL_DOCUMENTS];
+  }
+}
+
+export function saveDocuments(docs: DocumentResource[]) {
+  globalStore.__DOCUMENTS_CACHE__ = docs;
+  try {
+    ensureDataDir();
+    fs.writeFileSync(DOCUMENTS_FILE, JSON.stringify(docs, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('Failed to write documents to file:', err);
+  }
 }
 
 export function createDocument(data: Omit<DocumentResource, 'id'>): DocumentResource {
+  const docs = getDocumentResources();
   const id = `doc-${Date.now()}`;
   const newDoc: DocumentResource = { ...data, id };
-  memoryDocuments.unshift(newDoc);
+  docs.unshift(newDoc);
+  saveDocuments(docs);
   return newDoc;
 }
 
 export function deleteDocument(id: string): boolean {
-  const prevLen = memoryDocuments.length;
-  memoryDocuments = memoryDocuments.filter((d) => d.id !== id);
-  return memoryDocuments.length < prevLen;
+  const docs = getDocumentResources();
+  const filtered = docs.filter((d) => d.id !== id);
+  if (filtered.length === docs.length) return false;
+  saveDocuments(filtered);
+  return true;
 }
 
 export function createPost(data: Omit<Post, 'id' | 'createdAt' | 'updatedAt' | 'views'>): Post {
+  const posts = getPosts();
   const id = `post-${Date.now()}`;
   const now = new Date().toISOString();
   
   let slug = data.slug || slugify(data.title);
   let finalSlug = slug;
   let counter = 1;
-  while (memoryPosts.some(p => p.slug === finalSlug)) {
+  while (posts.some(p => p.slug === finalSlug)) {
     finalSlug = `${slug}-${counter}`;
     counter++;
   }
@@ -432,20 +532,22 @@ export function createPost(data: Omit<Post, 'id' | 'createdAt' | 'updatedAt' | '
     updatedAt: now,
   };
 
-  memoryPosts.unshift(newPost);
+  posts.unshift(newPost);
+  savePosts(posts);
   return newPost;
 }
 
 export function updatePost(id: string, updates: Partial<Post>): Post | null {
-  const index = memoryPosts.findIndex((p) => p.id === id);
+  const posts = getPosts();
+  const index = posts.findIndex((p) => p.id === id);
   if (index === -1) return null;
 
-  const oldPost = memoryPosts[index];
+  const oldPost = posts[index];
   let finalSlug = oldPost.slug;
   if (updates.title && updates.title !== oldPost.title && !updates.slug) {
     finalSlug = slugify(updates.title);
     let counter = 1;
-    while (memoryPosts.some(p => p.id !== id && p.slug === finalSlug)) {
+    while (posts.some(p => p.id !== id && p.slug === finalSlug)) {
       finalSlug = `${slugify(updates.title)}-${counter}`;
       counter++;
     }
@@ -465,21 +567,25 @@ export function updatePost(id: string, updates: Partial<Post>): Post | null {
     updatedAt: new Date().toISOString(),
   };
 
-  memoryPosts[index] = updated;
+  posts[index] = updated;
+  savePosts(posts);
   return updated;
 }
 
 export function deletePost(id: string): boolean {
-  const filtered = memoryPosts.filter((p) => p.id !== id);
-  if (filtered.length === memoryPosts.length) return false;
-  memoryPosts = filtered;
+  const posts = getPosts();
+  const filtered = posts.filter((p) => p.id !== id);
+  if (filtered.length === posts.length) return false;
+  savePosts(filtered);
   return true;
 }
 
 export function incrementViews(id: string): void {
-  const post = memoryPosts.find((p) => p.id === id);
+  const posts = getPosts();
+  const post = posts.find((p) => p.id === id);
   if (post) {
     post.views = (post.views || 0) + 1;
+    savePosts(posts);
   }
 }
 
