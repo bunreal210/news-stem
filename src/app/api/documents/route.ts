@@ -1,6 +1,5 @@
-export const runtime = 'edge';
-
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { getDocumentResources, createDocument } from '@/lib/db';
 import { isAdminAuthenticated } from '@/lib/auth';
 
@@ -37,6 +36,11 @@ export async function POST(req: NextRequest) {
       publishDate: new Date().toLocaleDateString('vi-VN'),
       downloadUrl: downloadUrl || '#',
     });
+
+    // Revalidate public documents and portal
+    revalidatePath('/', 'layout');
+    revalidatePath('/documents');
+    revalidatePath('/admin/dashboard');
 
     return NextResponse.json({ success: true, document: newDoc }, { status: 201 });
   } catch (error) {

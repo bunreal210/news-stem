@@ -1,6 +1,5 @@
-export const runtime = 'edge';
-
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { deleteDocument } from '@/lib/db';
 import { isAdminAuthenticated } from '@/lib/auth';
 
@@ -19,6 +18,11 @@ export async function DELETE(
     if (!ok) {
       return NextResponse.json({ error: 'Không tìm thấy văn bản để xóa.' }, { status: 404 });
     }
+
+    // Revalidate public documents and portal
+    revalidatePath('/', 'layout');
+    revalidatePath('/documents');
+    revalidatePath('/admin/dashboard');
 
     return NextResponse.json({ success: true, message: 'Đã xóa văn bản thành công.' });
   } catch (error) {

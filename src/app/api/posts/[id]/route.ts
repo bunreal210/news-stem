@@ -1,6 +1,5 @@
-export const runtime = 'edge';
-
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { getPostById, updatePost, deletePost, incrementViews } from '@/lib/db';
 import { isAdminAuthenticated } from '@/lib/auth';
 
@@ -39,6 +38,11 @@ export async function PUT(
       return NextResponse.json({ error: 'Không tìm thấy bài viết để cập nhật.' }, { status: 404 });
     }
 
+    // Revalidate public pages and dashboard
+    revalidatePath('/', 'layout');
+    revalidatePath('/posts');
+    revalidatePath('/admin/dashboard');
+
     return NextResponse.json({ success: true, post: updated });
   } catch (error) {
     console.error('Lỗi cập nhật bài viết:', error);
@@ -61,6 +65,11 @@ export async function DELETE(
     if (!ok) {
       return NextResponse.json({ error: 'Không tìm thấy bài viết để xóa.' }, { status: 404 });
     }
+
+    // Revalidate public pages and dashboard
+    revalidatePath('/', 'layout');
+    revalidatePath('/posts');
+    revalidatePath('/admin/dashboard');
 
     return NextResponse.json({ success: true, message: 'Đã xóa bài viết thành công.' });
   } catch (error) {

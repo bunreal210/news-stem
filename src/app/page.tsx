@@ -26,7 +26,7 @@ import {
   Users
 } from 'lucide-react';
 
-export const runtime = 'edge';
+export const dynamic = 'force-dynamic';
 export const revalidate = 0; // dynamic on request
 
 export default async function HomePage() {

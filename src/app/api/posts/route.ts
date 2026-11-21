@@ -1,6 +1,5 @@
-export const runtime = 'edge';
-
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { getPosts, createPost } from '@/lib/db';
 import { isAdminAuthenticated } from '@/lib/auth';
 
@@ -97,6 +96,11 @@ export async function POST(req: NextRequest) {
       attachments: attachments || [],
       status: status === 'draft' ? 'draft' : 'published',
     });
+
+    // Revalidate public portal and admin pages immediately
+    revalidatePath('/', 'layout');
+    revalidatePath('/posts');
+    revalidatePath('/admin/dashboard');
 
     return NextResponse.json({ success: true, post: newPost }, { status: 201 });
   } catch (error) {
