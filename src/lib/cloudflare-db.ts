@@ -42,7 +42,7 @@ export async function getPostsAsync(options?: {
 
   // Nếu không có D1 (đang chạy local dev), dùng local DB
   if (!d1) {
-    let posts = localDb.getPosts();
+    let posts = await localDb.getPosts();
     if (options?.status && options.status !== 'all') {
       posts = posts.filter((p) => p.status === options.status);
     }
@@ -122,7 +122,7 @@ export async function getPostsAsync(options?: {
 export async function getPostBySlugAsync(slug: string): Promise<Post | null> {
   const d1 = getD1Binding();
   if (!d1) {
-    return localDb.getPostBySlug(slug) || null;
+    return (await localDb.getPostBySlug(slug)) || null;
   }
 
   try {
@@ -153,6 +153,6 @@ export async function getPostBySlugAsync(slug: string): Promise<Post | null> {
     };
   } catch (err) {
     console.error('Lỗi lấy bài viết từ D1:', err);
-    return localDb.getPostBySlug(slug) || null;
+    return (await localDb.getPostBySlug(slug)) || null;
   }
 }

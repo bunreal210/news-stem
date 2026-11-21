@@ -26,13 +26,14 @@ import {
   Users
 } from 'lucide-react';
 
+export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0; // dynamic on request
 
 export default async function HomePage() {
-  const allPosts = getPosts().filter((p) => p.status === 'published');
-  const announcements = getAnnouncements();
-  const documents = getDocumentResources();
+  const allPosts = (await getPosts()).filter((p) => p.status === 'published');
+  const announcements = await getAnnouncements();
+  const documents = await getDocumentResources();
   const config = getSiteConfig();
 
   // Tin tức (bài viết không phải là thông báo thuần túy)

@@ -1,7 +1,6 @@
-import fs from 'fs';
-import path from 'path';
 import { Post, SiteConfig, ScheduleEvent, DocumentResource } from './types';
 import { extractYouTubeId, slugify } from './utils';
+import { getRequestContext } from '@cloudflare/next-on-pages';
 
 // Cấu hình mặc định cho Cổng Thông Tin CLB STEM
 export const DEFAULT_CONFIG: SiteConfig = {
@@ -358,71 +357,208 @@ Ban Quản trị Phòng Thực hành STEM thông báo lịch tạm dừng mượ
   }
 ];
 
-// Path to persistent data storage
-const DATA_DIR = path.join(process.cwd(), 'data');
-const POSTS_FILE = path.join(DATA_DIR, 'posts.json');
-const DOCUMENTS_FILE = path.join(DATA_DIR, 'documents.json');
-const SCHEDULE_FILE = path.join(DATA_DIR, 'schedule.json');
-
-function ensureDataDir() {
-  try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-  } catch (err) {
-    // ignore
-  }
-}
-
-// Global cache attached to globalThis to ensure sharing across modules in the same runtime
+// Global in-memory cache shared across modules in the same isolate
 const globalStore = globalThis as unknown as {
   __POSTS_CACHE__?: Post[];
   __DOCUMENTS_CACHE__?: DocumentResource[];
   __SCHEDULE_CACHE__?: ScheduleEvent[];
 };
 
-export function getPosts(): Post[] {
+if (!globalStore.__POSTS_CACHE__) {
+  globalStore.__POSTS_CACHE__ = [...INITIAL_POSTS];
+}
+if (!globalStore.__DOCUMENTS_CACHE__) {
+  globalStore.__DOCUMENTS_CACHE__ = [...INITIAL_DOCUMENTS];
+}
+if (!globalStore.__SCHEDULE_CACHE__) {
+  globalStore.__SCHEDULE_CACHE__ = [...INITIAL_SCHEDULE];
+}
+
+// Lấy Cloudflare D1 Database binding
+export function getD1(): any {
   try {
-    ensureDataDir();
-    if (fs.existsSync(POSTS_FILE)) {
-      const raw = fs.readFileSync(POSTS_FILE, 'utf-8');
-      const data = JSON.parse(raw);
-      if (Array.isArray(data) && data.length > 0) {
-        globalStore.__POSTS_CACHE__ = data;
-        return data;
+    const ctx = getRequestContext();
+    if (ctx && ctx.env && (ctx.env as any).DB) {
+      return (ctx.env as any).DB;
+    }
+  } catch {}
+  try {
+    if (typeof globalThis !== 'undefined' && (globalThis as any).DB) {
+      return (globalThis as any).DB;
+    }
+  } catch {}
+  try {
+    if (typeof process !== 'undefined' && process.env && (process.env as any).DB) {
+      return (process.env as any).DB;
+    }
+  } catch {}
+  return null;
+}
+
+let d1Initialized = false;
+async function ensureD1Tables(d1: any) {
+  if (d1Initialized) return;
+  try {
+    // 1. Khởi tạo bảng posts nếu chưa có
+    await d1.prepare(`
+      CREATE TABLE IF NOT EXISTS posts (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        slug TEXT UNIQUE NOT NULL,
+        summary TEXT,
+        content TEXT NOT NULL,
+        category TEXT NOT NULL,
+        thumbnail TEXT NOT NULL,
+        youtube_url TEXT,
+        youtube_id TEXT,
+        gallery TEXT,
+        author TEXT,
+        views INTEGER DEFAULT 0,
+        featured INTEGER DEFAULT 0,
+        is_pinned INTEGER DEFAULT 0,
+        is_urgent INTEGER DEFAULT 0,
+        attachments TEXT,
+        status TEXT DEFAULT 'published',
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      );
+    `).run();
+
+    // 2. Khởi tạo bảng documents nếu chưa có
+    await d1.prepare(`
+      CREATE TABLE IF NOT EXISTS documents (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        code TEXT NOT NULL,
+        category TEXT NOT NULL,
+        file_type TEXT NOT NULL,
+        file_size TEXT,
+        publish_date TEXT,
+        download_url TEXT
+      );
+    `).run();
+
+    // 3. Nếu bảng posts trống, nạp dữ liệu khởi tạo
+    const postCountRes = await d1.prepare('SELECT count(*) as count FROM posts').all();
+    if (postCountRes?.results?.[0]?.count === 0) {
+      for (const p of INITIAL_POSTS) {
+        await d1.prepare(`
+          INSERT INTO posts (id, title, slug, summary, content, category, thumbnail, youtube_url, youtube_id, gallery, author, views, featured, is_pinned, is_urgent, attachments, status, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(
+          p.id, p.title, p.slug, p.summary || '', p.content, p.category, p.thumbnail,
+          p.youtubeUrl || '', p.youtubeId || '', JSON.stringify(p.gallery || []),
+          p.author, p.views || 0, p.featured ? 1 : 0, p.isPinned ? 1 : 0, p.isUrgent ? 1 : 0,
+          JSON.stringify(p.attachments || []), p.status, p.createdAt, p.updatedAt
+        ).run();
       }
     }
-    // If file doesn't exist, seed with INITIAL_POSTS
-    savePosts(INITIAL_POSTS);
-    return [...INITIAL_POSTS];
+
+    // 4. Nếu bảng documents trống, nạp dữ liệu khởi tạo
+    const docCountRes = await d1.prepare('SELECT count(*) as count FROM documents').all();
+    if (docCountRes?.results?.[0]?.count === 0) {
+      for (const d of INITIAL_DOCUMENTS) {
+        await d1.prepare(`
+          INSERT INTO documents (id, title, code, category, file_type, file_size, publish_date, download_url)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(d.id, d.title, d.code, d.category, d.fileType, d.fileSize, d.publishDate, d.downloadUrl).run();
+      }
+    }
+
+    d1Initialized = true;
   } catch (err) {
-    if (globalStore.__POSTS_CACHE__) return globalStore.__POSTS_CACHE__;
-    return [...INITIAL_POSTS];
+    console.warn('D1 auto-init notice:', err);
   }
+}
+
+function mapRowToPost(row: any): Post {
+  let gallery: string[] = [];
+  try {
+    gallery = row.gallery ? JSON.parse(row.gallery) : [];
+  } catch {}
+
+  let attachments: any[] = [];
+  try {
+    attachments = row.attachments ? JSON.parse(row.attachments) : [];
+  } catch {}
+
+  return {
+    id: row.id,
+    title: row.title,
+    slug: row.slug,
+    summary: row.summary || '',
+    content: row.content,
+    category: row.category,
+    thumbnail: row.thumbnail,
+    youtubeUrl: row.youtube_url || '',
+    youtubeId: row.youtube_id || '',
+    gallery,
+    author: row.author || 'CLB STEM',
+    views: Number(row.views) || 0,
+    featured: Boolean(row.featured),
+    isPinned: Boolean(row.is_pinned),
+    isUrgent: Boolean(row.is_urgent),
+    attachments,
+    status: (row.status as 'published' | 'draft') || 'published',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+// -------------------------------------------------------------
+// POSTS CRUD (Hỗ trợ Cloudflare D1 + Fallback Global Memory)
+// -------------------------------------------------------------
+
+export async function getPosts(): Promise<Post[]> {
+  const d1 = getD1();
+  if (d1) {
+    try {
+      await ensureD1Tables(d1);
+      const { results } = await d1.prepare('SELECT * FROM posts ORDER BY created_at DESC').all();
+      if (Array.isArray(results) && results.length > 0) {
+        const posts = results.map(mapRowToPost);
+        globalStore.__POSTS_CACHE__ = posts;
+        return posts;
+      }
+    } catch (err) {
+      console.warn('Query D1 posts error, falling back:', err);
+    }
+  }
+  return globalStore.__POSTS_CACHE__ || [...INITIAL_POSTS];
 }
 
 export function savePosts(posts: Post[]) {
   globalStore.__POSTS_CACHE__ = posts;
-  try {
-    ensureDataDir();
-    fs.writeFileSync(POSTS_FILE, JSON.stringify(posts, null, 2), 'utf-8');
-  } catch (err) {
-    console.warn('Failed to write posts to file:', err);
-  }
 }
 
-export function getPostBySlug(slug: string): Post | undefined {
-  const posts = getPosts();
+export async function getPostBySlug(slug: string): Promise<Post | undefined> {
+  const d1 = getD1();
+  if (d1) {
+    try {
+      await ensureD1Tables(d1);
+      const row = await d1.prepare('SELECT * FROM posts WHERE slug = ?').bind(slug).first();
+      if (row) return mapRowToPost(row);
+    } catch {}
+  }
+  const posts = await getPosts();
   return posts.find((p) => p.slug === slug);
 }
 
-export function getPostById(id: string): Post | undefined {
-  const posts = getPosts();
+export async function getPostById(id: string): Promise<Post | undefined> {
+  const d1 = getD1();
+  if (d1) {
+    try {
+      await ensureD1Tables(d1);
+      const row = await d1.prepare('SELECT * FROM posts WHERE id = ?').bind(id).first();
+      if (row) return mapRowToPost(row);
+    } catch {}
+  }
+  const posts = await getPosts();
   return posts.find((p) => p.id === id);
 }
 
-export function getAnnouncements(): Post[] {
-  const posts = getPosts();
+export async function getAnnouncements(): Promise<Post[]> {
+  const posts = await getPosts();
   return posts
     .filter((p) => p.status === 'published' && p.category === 'Thong-bao')
     .sort((a, b) => {
@@ -432,83 +568,8 @@ export function getAnnouncements(): Post[] {
     });
 }
 
-export function getScheduleEvents(): ScheduleEvent[] {
-  try {
-    ensureDataDir();
-    if (fs.existsSync(SCHEDULE_FILE)) {
-      const raw = fs.readFileSync(SCHEDULE_FILE, 'utf-8');
-      const data = JSON.parse(raw);
-      if (Array.isArray(data) && data.length > 0) {
-        globalStore.__SCHEDULE_CACHE__ = data;
-        return data;
-      }
-    }
-    saveSchedule(INITIAL_SCHEDULE);
-    return [...INITIAL_SCHEDULE];
-  } catch (err) {
-    if (globalStore.__SCHEDULE_CACHE__) return globalStore.__SCHEDULE_CACHE__;
-    return [...INITIAL_SCHEDULE];
-  }
-}
-
-export function saveSchedule(schedule: ScheduleEvent[]) {
-  globalStore.__SCHEDULE_CACHE__ = schedule;
-  try {
-    ensureDataDir();
-    fs.writeFileSync(SCHEDULE_FILE, JSON.stringify(schedule, null, 2), 'utf-8');
-  } catch (err) {
-    console.warn('Failed to write schedule to file:', err);
-  }
-}
-
-export function getDocumentResources(): DocumentResource[] {
-  try {
-    ensureDataDir();
-    if (fs.existsSync(DOCUMENTS_FILE)) {
-      const raw = fs.readFileSync(DOCUMENTS_FILE, 'utf-8');
-      const data = JSON.parse(raw);
-      if (Array.isArray(data) && data.length > 0) {
-        globalStore.__DOCUMENTS_CACHE__ = data;
-        return data;
-      }
-    }
-    saveDocuments(INITIAL_DOCUMENTS);
-    return [...INITIAL_DOCUMENTS];
-  } catch (err) {
-    if (globalStore.__DOCUMENTS_CACHE__) return globalStore.__DOCUMENTS_CACHE__;
-    return [...INITIAL_DOCUMENTS];
-  }
-}
-
-export function saveDocuments(docs: DocumentResource[]) {
-  globalStore.__DOCUMENTS_CACHE__ = docs;
-  try {
-    ensureDataDir();
-    fs.writeFileSync(DOCUMENTS_FILE, JSON.stringify(docs, null, 2), 'utf-8');
-  } catch (err) {
-    console.warn('Failed to write documents to file:', err);
-  }
-}
-
-export function createDocument(data: Omit<DocumentResource, 'id'>): DocumentResource {
-  const docs = getDocumentResources();
-  const id = `doc-${Date.now()}`;
-  const newDoc: DocumentResource = { ...data, id };
-  docs.unshift(newDoc);
-  saveDocuments(docs);
-  return newDoc;
-}
-
-export function deleteDocument(id: string): boolean {
-  const docs = getDocumentResources();
-  const filtered = docs.filter((d) => d.id !== id);
-  if (filtered.length === docs.length) return false;
-  saveDocuments(filtered);
-  return true;
-}
-
-export function createPost(data: Omit<Post, 'id' | 'createdAt' | 'updatedAt' | 'views'>): Post {
-  const posts = getPosts();
+export async function createPost(data: Omit<Post, 'id' | 'createdAt' | 'updatedAt' | 'views'>): Promise<Post> {
+  const posts = await getPosts();
   const id = `post-${Date.now()}`;
   const now = new Date().toISOString();
   
@@ -532,13 +593,33 @@ export function createPost(data: Omit<Post, 'id' | 'createdAt' | 'updatedAt' | '
     updatedAt: now,
   };
 
+  // 1. Lưu vào D1 nếu có
+  const d1 = getD1();
+  if (d1) {
+    try {
+      await ensureD1Tables(d1);
+      await d1.prepare(`
+        INSERT INTO posts (id, title, slug, summary, content, category, thumbnail, youtube_url, youtube_id, gallery, author, views, featured, is_pinned, is_urgent, attachments, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        newPost.id, newPost.title, newPost.slug, newPost.summary || '', newPost.content, newPost.category, newPost.thumbnail,
+        newPost.youtubeUrl || '', newPost.youtubeId || '', JSON.stringify(newPost.gallery || []),
+        newPost.author, newPost.views || 0, newPost.featured ? 1 : 0, newPost.isPinned ? 1 : 0, newPost.isUrgent ? 1 : 0,
+        JSON.stringify(newPost.attachments || []), newPost.status, newPost.createdAt, newPost.updatedAt
+      ).run();
+    } catch (err) {
+      console.warn('D1 insert error:', err);
+    }
+  }
+
+  // 2. Cập nhật cache RAM
   posts.unshift(newPost);
-  savePosts(posts);
+  globalStore.__POSTS_CACHE__ = posts;
   return newPost;
 }
 
-export function updatePost(id: string, updates: Partial<Post>): Post | null {
-  const posts = getPosts();
+export async function updatePost(id: string, updates: Partial<Post>): Promise<Post | null> {
+  const posts = await getPosts();
   const index = posts.findIndex((p) => p.id === id);
   if (index === -1) return null;
 
@@ -567,26 +648,151 @@ export function updatePost(id: string, updates: Partial<Post>): Post | null {
     updatedAt: new Date().toISOString(),
   };
 
+  // 1. Cập nhật D1
+  const d1 = getD1();
+  if (d1) {
+    try {
+      await ensureD1Tables(d1);
+      await d1.prepare(`
+        UPDATE posts SET 
+          title = ?, slug = ?, summary = ?, content = ?, category = ?, thumbnail = ?, 
+          youtube_url = ?, youtube_id = ?, gallery = ?, author = ?, featured = ?, 
+          is_pinned = ?, is_urgent = ?, attachments = ?, status = ?, updated_at = ?
+        WHERE id = ?
+      `).bind(
+        updated.title, updated.slug, updated.summary || '', updated.content, updated.category, updated.thumbnail,
+        updated.youtubeUrl || '', updated.youtubeId || '', JSON.stringify(updated.gallery || []),
+        updated.author, updated.featured ? 1 : 0, updated.isPinned ? 1 : 0, updated.isUrgent ? 1 : 0,
+        JSON.stringify(updated.attachments || []), updated.status, updated.updatedAt, id
+      ).run();
+    } catch (err) {
+      console.warn('D1 update error:', err);
+    }
+  }
+
+  // 2. Cập nhật cache RAM
   posts[index] = updated;
-  savePosts(posts);
+  globalStore.__POSTS_CACHE__ = posts;
   return updated;
 }
 
-export function deletePost(id: string): boolean {
-  const posts = getPosts();
+export async function deletePost(id: string): Promise<boolean> {
+  const posts = await getPosts();
   const filtered = posts.filter((p) => p.id !== id);
   if (filtered.length === posts.length) return false;
-  savePosts(filtered);
+
+  // 1. Xóa trong D1
+  const d1 = getD1();
+  if (d1) {
+    try {
+      await ensureD1Tables(d1);
+      await d1.prepare('DELETE FROM posts WHERE id = ?').bind(id).run();
+    } catch (err) {
+      console.warn('D1 delete error:', err);
+    }
+  }
+
+  // 2. Cập nhật cache RAM
+  globalStore.__POSTS_CACHE__ = filtered;
   return true;
 }
 
-export function incrementViews(id: string): void {
-  const posts = getPosts();
+export async function incrementViews(id: string): Promise<void> {
+  const posts = await getPosts();
   const post = posts.find((p) => p.id === id);
   if (post) {
     post.views = (post.views || 0) + 1;
-    savePosts(posts);
+    const d1 = getD1();
+    if (d1) {
+      try {
+        await d1.prepare('UPDATE posts SET views = views + 1 WHERE id = ?').bind(id).run();
+      } catch {}
+    }
   }
+}
+
+// -------------------------------------------------------------
+// DOCUMENTS CRUD (Hỗ trợ Cloudflare D1 + Fallback Global Memory)
+// -------------------------------------------------------------
+
+export async function getDocumentResources(): Promise<DocumentResource[]> {
+  const d1 = getD1();
+  if (d1) {
+    try {
+      await ensureD1Tables(d1);
+      const { results } = await d1.prepare('SELECT * FROM documents').all();
+      if (Array.isArray(results) && results.length > 0) {
+        const docs: DocumentResource[] = results.map((r: any) => ({
+          id: r.id,
+          title: r.title,
+          code: r.code,
+          category: r.category,
+          fileType: r.file_type,
+          fileSize: r.file_size || '1.0 MB',
+          publishDate: r.publish_date || '',
+          downloadUrl: r.download_url || '#',
+        }));
+        globalStore.__DOCUMENTS_CACHE__ = docs;
+        return docs;
+      }
+    } catch (err) {
+      console.warn('Query D1 documents error:', err);
+    }
+  }
+  return globalStore.__DOCUMENTS_CACHE__ || [...INITIAL_DOCUMENTS];
+}
+
+export async function createDocument(data: Omit<DocumentResource, 'id'>): Promise<DocumentResource> {
+  const docs = await getDocumentResources();
+  const id = `doc-${Date.now()}`;
+  const newDoc: DocumentResource = { ...data, id };
+
+  const d1 = getD1();
+  if (d1) {
+    try {
+      await ensureD1Tables(d1);
+      await d1.prepare(`
+        INSERT INTO documents (id, title, code, category, file_type, file_size, publish_date, download_url)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        newDoc.id, newDoc.title, newDoc.code, newDoc.category,
+        newDoc.fileType, newDoc.fileSize, newDoc.publishDate, newDoc.downloadUrl
+      ).run();
+    } catch (err) {
+      console.warn('D1 insert doc error:', err);
+    }
+  }
+
+  docs.unshift(newDoc);
+  globalStore.__DOCUMENTS_CACHE__ = docs;
+  return newDoc;
+}
+
+export async function deleteDocument(id: string): Promise<boolean> {
+  const docs = await getDocumentResources();
+  const filtered = docs.filter((d) => d.id !== id);
+  if (filtered.length === docs.length) return false;
+
+  const d1 = getD1();
+  if (d1) {
+    try {
+      await ensureD1Tables(d1);
+      await d1.prepare('DELETE FROM documents WHERE id = ?').bind(id).run();
+    } catch (err) {
+      console.warn('D1 delete doc error:', err);
+    }
+  }
+
+  globalStore.__DOCUMENTS_CACHE__ = filtered;
+  return true;
+}
+
+// -------------------------------------------------------------
+// SCHEDULE & CONFIG
+// -------------------------------------------------------------
+
+export function getScheduleEvents(): ScheduleEvent[] {
+  return globalStore.__SCHEDULE_CACHE__ || [...INITIAL_SCHEDULE];
 }
 
 export function getSiteConfig(): SiteConfig {

@@ -1,3 +1,5 @@
+export const runtime = 'edge';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { deleteDocument } from '@/lib/db';
@@ -14,7 +16,7 @@ export async function DELETE(
     }
 
     const { id } = await params;
-    const ok = deleteDocument(id);
+    const ok = await deleteDocument(id);
     if (!ok) {
       return NextResponse.json({ error: 'Không tìm thấy văn bản để xóa.' }, { status: 404 });
     }

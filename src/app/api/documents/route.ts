@@ -1,3 +1,5 @@
+export const runtime = 'edge';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { getDocumentResources, createDocument } from '@/lib/db';
@@ -5,7 +7,7 @@ import { isAdminAuthenticated } from '@/lib/auth';
 
 export async function GET(req: NextRequest) {
   try {
-    const docs = getDocumentResources();
+    const docs = await getDocumentResources();
     return NextResponse.json({ documents: docs });
   } catch (error) {
     console.error('Lỗi lấy tài liệu:', error);
@@ -27,7 +29,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Thiếu thông tin bắt buộc của văn bản.' }, { status: 400 });
     }
 
-    const newDoc = createDocument({
+    const newDoc = await createDocument({
       title,
       code,
       category: category || 'Biểu mẫu',

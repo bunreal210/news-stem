@@ -31,19 +31,20 @@ interface PostDetailPageProps {
   }>;
 }
 
+export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function PostDetailPage({ params }: PostDetailPageProps) {
   const { slug } = await params;
-  const post = getPostBySlug(slug);
+  const post = await getPostBySlug(slug);
 
   if (!post || post.status !== 'published') {
     notFound();
   }
 
   // Tăng lượt xem (server-side call)
-  incrementViews(post.id);
+  await incrementViews(post.id);
 
   const category = CATEGORIES.find((c) => c.id === post.category) || {
     id: post.category,
@@ -53,14 +54,14 @@ export default async function PostDetailPage({ params }: PostDetailPageProps) {
   };
 
   // Bài viết liên quan
-  const allPosts = getPosts().filter((p) => p.status === 'published' && p.id !== post.id);
+  const allPosts = (await getPosts()).filter((p) => p.status === 'published' && p.id !== post.id);
   const relatedPosts = allPosts
     .filter((p) => p.category === post.category)
     .concat(allPosts.filter((p) => p.category !== post.category))
     .slice(0, 3);
 
   // Danh sách thông báo mới nhất cho sidebar
-  const sidebarNotices = getAnnouncements().slice(0, 4);
+  const sidebarNotices = (await getAnnouncements()).slice(0, 4);
 
   // Render nội dung (chuyển đổi đơn giản các ký tự Markdown cơ bản: ##, ###, *, >)
   const renderFormattedContent = (text: string) => {

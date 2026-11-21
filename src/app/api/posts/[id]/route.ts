@@ -1,3 +1,5 @@
+export const runtime = 'edge';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { getPostById, updatePost, deletePost, incrementViews } from '@/lib/db';
@@ -9,7 +11,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const post = getPostById(id);
+    const post = await getPostById(id);
     if (!post) {
       return NextResponse.json({ error: 'Bài viết không tồn tại.' }, { status: 404 });
     }
@@ -33,7 +35,7 @@ export async function PUT(
     const { id } = await params;
     const updates = await req.json();
 
-    const updated = updatePost(id, updates);
+    const updated = await updatePost(id, updates);
     if (!updated) {
       return NextResponse.json({ error: 'Không tìm thấy bài viết để cập nhật.' }, { status: 404 });
     }
@@ -61,7 +63,7 @@ export async function DELETE(
     }
 
     const { id } = await params;
-    const ok = deletePost(id);
+    const ok = await deletePost(id);
     if (!ok) {
       return NextResponse.json({ error: 'Không tìm thấy bài viết để xóa.' }, { status: 404 });
     }
@@ -84,7 +86,7 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    incrementViews(id);
+    await incrementViews(id);
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ error: 'Không thể tăng lượt xem.' }, { status: 500 });

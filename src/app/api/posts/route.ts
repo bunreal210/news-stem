@@ -1,3 +1,5 @@
+export const runtime = 'edge';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { getPosts, createPost } from '@/lib/db';
@@ -11,7 +13,7 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get('status') || 'published'; // mặc định chỉ lấy published cho khách
     const limit = searchParams.get('limit');
 
-    let posts = getPosts();
+    let posts = await getPosts();
 
     // Lọc theo trạng thái (nếu không phải admin hỏi all)
     if (status !== 'all') {
@@ -80,7 +82,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const newPost = createPost({
+    const newPost = await createPost({
       title,
       slug: '',
       summary: summary || '',

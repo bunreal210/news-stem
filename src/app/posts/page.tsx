@@ -12,13 +12,14 @@ interface PostsPageProps {
   }>;
 }
 
+export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function PostsPage({ searchParams }: PostsPageProps) {
   const { category = 'Tat-ca', search = '' } = await searchParams;
 
-  let posts = getPosts().filter((p) => p.status === 'published');
+  let posts = (await getPosts()).filter((p) => p.status === 'published');
 
   if (category && category !== 'Tat-ca') {
     posts = posts.filter((p) => p.category === category);

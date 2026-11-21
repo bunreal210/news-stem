@@ -23,12 +23,13 @@ interface DocumentsPageProps {
   }>;
 }
 
+export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function DocumentsPage({ searchParams }: DocumentsPageProps) {
   const { category = 'Tat-ca', search = '' } = await searchParams;
-  const allDocs = getDocumentResources();
+  const allDocs = await getDocumentResources();
 
   // Extract unique categories
   const categoriesList = ['Tat-ca', ...Array.from(new Set(allDocs.map((d) => d.category)))];
