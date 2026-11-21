@@ -1,5 +1,6 @@
 import React from 'react';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
+import { isAdminAuthenticated } from '@/lib/auth';
 import { getPostById } from '@/lib/db';
 import PostForm from '@/components/PostForm';
 import { Edit, Bell } from 'lucide-react';
@@ -15,6 +16,11 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function EditPostPage({ params }: EditPostPageProps) {
+  const isAuth = await isAdminAuthenticated();
+  if (!isAuth) {
+    redirect('/admin');
+  }
+
   const { id } = await params;
   const post = await getPostById(id);
 

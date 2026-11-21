@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Post, CATEGORIES, Attachment } from '@/lib/types';
 import { extractYouTubeId } from '@/lib/utils';
@@ -65,6 +65,19 @@ export default function PostForm({ initialData, isEdit = false, defaultCategory 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [isAuthValid, setIsAuthValid] = useState<boolean | null>(null);
+
+  // Kiểm tra phiên đăng nhập admin khi mở form
+  useEffect(() => {
+    fetch('/api/auth/check')
+      .then((res) => res.json())
+      .then((data) => {
+        setIsAuthValid(Boolean(data.authenticated));
+      })
+      .catch(() => {
+        setIsAuthValid(true); // không block nếu offline check
+      });
+  }, []);
 
   // Live extracted YouTube ID
   const detectedYouTubeId = extractYouTubeId(youtubeUrl);
@@ -185,25 +198,35 @@ export default function PostForm({ initialData, isEdit = false, defaultCategory 
 
     if (!title.trim()) {
       setError('Vui lòng nhập tiêu đề bài viết / thông báo.');
+      const el = document.getElementById('post-title-input');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.focus();
+      }
       return;
     }
 
     if (!content.trim()) {
-      setError('Vui lòng nhập nội dung chi tiết.');
+      setError('Vui lòng nhập nội dung chi tiết bài viết / thông báo.');
+      const el = document.getElementById('content-textarea');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.focus();
+      }
       return;
     }
 
     setLoading(true);
 
     const payload = {
-      title,
-      summary,
+      title: title.trim(),
+      summary: summary.trim(),
       category,
-      thumbnail: thumbnail || 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80',
-      youtubeUrl,
-      content,
+      thumbnail: thumbnail.trim() || 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80',
+      youtubeUrl: youtubeUrl.trim(),
+      content: content.trim(),
       gallery,
-      author,
+      author: author.trim() || 'CLB STEM',
       featured,
       isPinned,
       isUrgent,
@@ -221,6 +244,14 @@ export default function PostForm({ initialData, isEdit = false, defaultCategory 
         body: JSON.stringify(payload),
       });
 
+      if (res.status === 401) {
+        setError('Phiên làm việc quản trị viên đã hết hạn hoặc chưa đăng nhập.');
+        alert('Phiên làm việc quản trị viên đã hết hạn. Hệ thống sẽ chuyển hướng bạn đến trang đăng nhập.');
+        router.push('/admin');
+        setLoading(false);
+        return;
+      }
+
       const data = await res.json();
 
       if (!res.ok) {
@@ -229,12 +260,12 @@ export default function PostForm({ initialData, isEdit = false, defaultCategory 
         return;
       }
 
-      setSuccess(isEdit ? 'Cập nhật thành công!' : 'Tạo mới thành công!');
+      setSuccess(isEdit ? 'Cập nhật bài viết thành công!' : 'Xuất bản bài viết thành công!');
       setTimeout(() => {
         router.push('/admin/dashboard');
-      }, 1000);
+      }, 800);
     } catch {
-      setError('Lỗi kết nối máy chủ.');
+      setError('Lỗi kết nối máy chủ. Vui lòng kiểm tra lại mạng hoặc thử lại.');
       setLoading(false);
     }
   };
@@ -242,7 +273,7 @@ export default function PostForm({ initialData, isEdit = false, defaultCategory 
   const isNoticeCategory = category === 'Thong-bao';
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8 max-w-4xl mx-auto pb-20">
+    <form noValidate onSubmit={handleSubmit} className="space-y-8 max-w-4xl mx-auto pb-20">
       
       {/* Top back bar */}
       <div className="flex items-center justify-between">
@@ -266,17 +297,35 @@ export default function PostForm({ initialData, isEdit = false, defaultCategory 
         </div>
       </div>
 
+      {/* Cảnh báo phiên đăng nhập nếu chưa auth */}
+      {isAuthValid === false && (
+        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 text-amber-900 text-xs sm:text-sm flex items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-5 h-5 shrink-0 text-amber-600" />
+            <span>
+              <strong>Cảnh báo:</strong> Phiên đăng nhập quản trị viên chưa được xác thực hoặc đã hết hạn. Bạn cần đăng nhập để có quyền xuất bản bài viết.
+            </span>
+          </div>
+          <Link
+            href="/admin"
+            className="px-3.5 py-1.5 rounded-xl bg-amber-600 text-white font-bold text-xs hover:bg-amber-700 whitespace-nowrap shadow-xs"
+          >
+            Đăng nhập lại
+          </Link>
+        </div>
+      )}
+
       {/* Alerts */}
       {error && (
-        <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-sm flex items-center gap-2">
-          <AlertCircle className="w-5 h-5 shrink-0" />
-          <span>{error}</span>
+        <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-sm flex items-center gap-2 shadow-xs animate-fadeIn">
+          <AlertCircle className="w-5 h-5 shrink-0 text-red-600" />
+          <span className="font-semibold">{error}</span>
         </div>
       )}
       {success && (
-        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm flex items-center gap-2">
-          <CheckCircle className="w-5 h-5 shrink-0" />
-          <span>{success}</span>
+        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm flex items-center gap-2 shadow-xs animate-fadeIn">
+          <CheckCircle className="w-5 h-5 shrink-0 text-emerald-600" />
+          <span className="font-semibold">{success}</span>
         </div>
       )}
 
@@ -289,6 +338,7 @@ export default function PostForm({ initialData, isEdit = false, defaultCategory 
             Tiêu đề bài viết / Thông báo *
           </label>
           <input
+            id="post-title-input"
             type="text"
             required
             value={title}
@@ -420,7 +470,7 @@ export default function PostForm({ initialData, isEdit = false, defaultCategory 
               </div>
 
               <input
-                type="url"
+                type="text"
                 value={thumbnail}
                 onChange={(e) => setThumbnail(e.target.value)}
                 placeholder="Dán đường link ảnh (https://...)"
@@ -465,7 +515,7 @@ export default function PostForm({ initialData, isEdit = false, defaultCategory 
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <input
-                type="url"
+                type="text"
                 value={youtubeUrl}
                 onChange={(e) => setYoutubeUrl(e.target.value)}
                 placeholder="Ví dụ: https://www.youtube.com/watch?v=7Pq-S557XQU"
@@ -744,8 +794,22 @@ export default function PostForm({ initialData, isEdit = false, defaultCategory 
 
       </div>
 
+      {/* Bottom Alert Feedback */}
+      {error && (
+        <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-sm flex items-center gap-2 shadow-xs animate-fadeIn">
+          <AlertCircle className="w-5 h-5 shrink-0 text-red-600" />
+          <span className="font-semibold">{error}</span>
+        </div>
+      )}
+      {success && (
+        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm flex items-center gap-2 shadow-xs animate-fadeIn">
+          <CheckCircle className="w-5 h-5 shrink-0 text-emerald-600" />
+          <span className="font-semibold">{success}</span>
+        </div>
+      )}
+
       {/* Bottom submit button */}
-      <div className="flex items-center justify-end gap-3">
+      <div className="flex items-center justify-end gap-3 pt-2">
         <Link
           href="/admin/dashboard"
           className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-sm font-semibold hover:bg-slate-50 transition-colors"
@@ -755,9 +819,18 @@ export default function PostForm({ initialData, isEdit = false, defaultCategory 
         <button
           type="submit"
           disabled={loading}
-          className="px-8 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-lg shadow-blue-500/25 disabled:opacity-50 transition-all"
+          className="px-8 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-lg shadow-blue-500/25 disabled:opacity-50 transition-all flex items-center gap-2"
         >
-          {loading ? 'Đang xử lý...' : isEdit ? 'Cập Nhật Bài Viết' : 'Xuất Bản Ngay'}
+          {loading ? (
+            <>
+              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              <span>Đang xử lý & lưu bài...</span>
+            </>
+          ) : isEdit ? (
+            'Cập Nhật Bài Viết'
+          ) : (
+            'Xuất Bản Ngay'
+          )}
         </button>
       </div>
 

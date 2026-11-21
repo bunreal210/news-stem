@@ -13,7 +13,7 @@ export async function setAdminSession(): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.set(AUTH_COOKIE_NAME, SECRET_TOKEN, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: false, // Cho phép hoạt động ổn định trên cả môi trường HTTP local và HTTPS Cloudflare
     sameSite: 'lax',
     maxAge: 60 * 60 * 24 * 7, // 7 ngày
     path: '/',

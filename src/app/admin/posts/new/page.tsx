@@ -1,4 +1,6 @@
 import React from 'react';
+import { redirect } from 'next/navigation';
+import { isAdminAuthenticated } from '@/lib/auth';
 import PostForm from '@/components/PostForm';
 import { PlusCircle, Bell, Newspaper } from 'lucide-react';
 
@@ -12,6 +14,11 @@ export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 export default async function NewPostPage({ searchParams }: NewPostPageProps) {
+  const isAuth = await isAdminAuthenticated();
+  if (!isAuth) {
+    redirect('/admin');
+  }
+
   const { category } = await searchParams;
   const isNotice = category === 'Thong-bao';
 
