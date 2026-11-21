@@ -58,7 +58,21 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { title, summary, content, category, thumbnail, youtubeUrl, gallery, author, featured, status } = body;
+    const { 
+      title, 
+      summary, 
+      content, 
+      category, 
+      thumbnail, 
+      youtubeUrl, 
+      gallery, 
+      author, 
+      featured, 
+      status,
+      isPinned,
+      isUrgent,
+      attachments 
+    } = body;
 
     if (!title || !content || !category) {
       return NextResponse.json(
@@ -78,6 +92,9 @@ export async function POST(req: NextRequest) {
       gallery: gallery || [],
       author: author || 'CLB STEM',
       featured: Boolean(featured),
+      isPinned: Boolean(isPinned),
+      isUrgent: Boolean(isUrgent),
+      attachments: attachments || [],
       status: status === 'draft' ? 'draft' : 'published',
     });
 

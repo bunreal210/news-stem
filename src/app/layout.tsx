@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import Navbar from '@/components/Navbar';
+import PortalHeader from '@/components/PortalHeader';
 import Footer from '@/components/Footer';
 
 export const metadata: Metadata = {
-  title: 'CLB STEM & Sáng Tạo Trẻ - Cổng Thông Tin & Hoạt Động',
-  description: 'Trang thông tin, tin tức, bài viết, hình ảnh và video hoạt động của Câu lạc bộ STEM trường học.',
+  title: 'CỔNG THÔNG TIN ĐIỆN TỬ STEM & ROBOTICS - THPT BẮC ĐÔNG QUAN (BSSRC)',
+  description: 'Cổng thông tin điện tử Câu lạc bộ Nghiên cứu Khoa học, STEM và Robotics trường THPT Bắc Đông Quan (BSSRC). Nơi đăng tải thông báo, kế hoạch hoạt động, nghiên cứu KHKT và học liệu thực hành.',
 };
 
 export default function RootLayout({
@@ -15,8 +15,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="vi">
-      <body className="flex flex-col min-h-screen text-slate-800 antialiased selection:bg-blue-600 selection:text-white">
-        <Navbar />
+      <body className="flex flex-col min-h-screen bg-slate-50/60 text-slate-800 antialiased selection:bg-blue-600 selection:text-white">
+        <PortalHeader />
         <main className="flex-1">{children}</main>
         <Footer />
       </body>

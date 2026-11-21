@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Post, CATEGORIES } from '@/lib/types';
+import { Post, CATEGORIES, Attachment } from '@/lib/types';
 import { extractYouTubeId } from '@/lib/utils';
 import YouTubePlayer from '@/components/YouTubePlayer';
 import { 
@@ -12,36 +12,51 @@ import {
   X, 
   CheckCircle, 
   AlertCircle, 
-  Eye, 
   Save, 
   ArrowLeft,
   Bold,
   Heading,
   List,
   Quote,
-  Sparkles
+  Bell,
+  Pin,
+  FileText,
+  Plus,
+  Trash2,
+  FileCheck
 } from 'lucide-react';
 import Link from 'next/link';
 
 interface PostFormProps {
   initialData?: Post;
   isEdit?: boolean;
+  defaultCategory?: string;
 }
 
-export default function PostForm({ initialData, isEdit = false }: PostFormProps) {
+export default function PostForm({ initialData, isEdit = false, defaultCategory }: PostFormProps) {
   const router = useRouter();
 
   // Form states
   const [title, setTitle] = useState(initialData?.title || '');
   const [summary, setSummary] = useState(initialData?.summary || '');
-  const [category, setCategory] = useState(initialData?.category || 'Tin-hoat-dong');
+  const [category, setCategory] = useState(initialData?.category || defaultCategory || 'Tin-hoat-dong');
   const [thumbnail, setThumbnail] = useState(initialData?.thumbnail || '');
   const [youtubeUrl, setYoutubeUrl] = useState(initialData?.youtubeUrl || '');
   const [content, setContent] = useState(initialData?.content || '');
   const [gallery, setGallery] = useState<string[]>(initialData?.gallery || []);
   const [author, setAuthor] = useState(initialData?.author || 'Ban Truyền thông STEM');
   const [featured, setFeatured] = useState(initialData?.featured ?? false);
+  const [isPinned, setIsPinned] = useState(initialData?.isPinned ?? false);
+  const [isUrgent, setIsUrgent] = useState(initialData?.isUrgent ?? false);
   const [status, setStatus] = useState<'published' | 'draft'>(initialData?.status || 'published');
+  
+  // Attachments state
+  const [attachments, setAttachments] = useState<Attachment[]>(initialData?.attachments || []);
+  const [newAttName, setNewAttName] = useState('');
+  const [newAttUrl, setNewAttUrl] = useState('');
+  const [newAttSize, setNewAttSize] = useState('1.5 MB');
+  const [newAttType, setNewAttType] = useState('PDF');
+  const [showAddAtt, setShowAddAtt] = useState(false);
 
   // UI states
   const [uploadingThumb, setUploadingThumb] = useState(false);
@@ -106,53 +121,75 @@ export default function PostForm({ initialData, isEdit = false }: PostFormProps)
         if (res.ok && data.url) {
           newUrls.push(data.url);
         }
-      } catch (err) {
-        console.error(err);
+      } catch {
+        // continue with other files
       }
     }
 
-    setGallery((prev) => [...prev, ...newUrls]);
+    if (newUrls.length > 0) {
+      setGallery((prev) => [...prev, ...newUrls]);
+    }
     setUploadingGallery(false);
   };
 
-  // Xóa ảnh khỏi Gallery
   const removeGalleryImage = (indexToRemove: number) => {
-    setGallery((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+    setGallery((prev) => prev.filter((_, i) => i !== indexToRemove));
   };
 
-  // Chèn cú pháp định dạng nhanh vào textarea
-  const insertFormat = (prefix: string, suffix: string = '') => {
-    const textarea = document.getElementById('content-textarea') as HTMLTextAreaElement;
+  const insertFormat = (prefix: string) => {
+    const textarea = document.getElementById('content-textarea') as HTMLTextAreaElement | null;
     if (!textarea) return;
 
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    const text = textarea.value;
-    const selectedText = text.substring(start, end) || 'nội dung';
+    const selectedText = textarea.value.substring(start, end);
+    const replacement = `${prefix}${selectedText}`;
 
-    const replacement = `${prefix}${selectedText}${suffix}`;
-    const newText = text.substring(0, start) + replacement + text.substring(end);
-    setContent(newText);
+    const newContent = textarea.value.substring(0, start) + replacement + textarea.value.substring(end);
+    setContent(newContent);
 
     setTimeout(() => {
       textarea.focus();
-      textarea.setSelectionRange(start + prefix.length, start + prefix.length + selectedText.length);
-    }, 50);
+      textarea.setSelectionRange(start + prefix.length, end + prefix.length);
+    }, 0);
   };
 
-  // Submit bài viết
+  // Thêm tài liệu đính kèm
+  const handleAddAttachment = () => {
+    if (!newAttName.trim() || !newAttUrl.trim()) {
+      alert('Vui lòng nhập tên tài liệu và đường dẫn tải về.');
+      return;
+    }
+    setAttachments((prev) => [
+      ...prev,
+      {
+        name: newAttName.trim(),
+        url: newAttUrl.trim(),
+        size: newAttSize.trim() || '1.0 MB',
+        type: newAttType.trim().toUpperCase() || 'FILE',
+      },
+    ]);
+    setNewAttName('');
+    setNewAttUrl('');
+    setShowAddAtt(false);
+  };
+
+  const handleRemoveAttachment = (idx: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== idx));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccess('');
 
     if (!title.trim()) {
-      setError('Vui lòng nhập tiêu đề bài viết.');
+      setError('Vui lòng nhập tiêu đề bài viết / thông báo.');
       return;
     }
 
     if (!content.trim()) {
-      setError('Vui lòng nhập nội dung bài viết.');
+      setError('Vui lòng nhập nội dung chi tiết.');
       return;
     }
 
@@ -168,6 +205,9 @@ export default function PostForm({ initialData, isEdit = false }: PostFormProps)
       gallery,
       author,
       featured,
+      isPinned,
+      isUrgent,
+      attachments,
       status,
     };
 
@@ -189,7 +229,7 @@ export default function PostForm({ initialData, isEdit = false }: PostFormProps)
         return;
       }
 
-      setSuccess(isEdit ? 'Cập nhật bài viết thành công!' : 'Tạo bài viết mới thành công!');
+      setSuccess(isEdit ? 'Cập nhật thành công!' : 'Tạo mới thành công!');
       setTimeout(() => {
         router.push('/admin/dashboard');
       }, 1000);
@@ -198,6 +238,8 @@ export default function PostForm({ initialData, isEdit = false }: PostFormProps)
       setLoading(false);
     }
   };
+
+  const isNoticeCategory = category === 'Thong-bao';
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8 max-w-4xl mx-auto pb-20">
@@ -209,7 +251,7 @@ export default function PostForm({ initialData, isEdit = false }: PostFormProps)
           className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-slate-600 hover:text-blue-600 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          Quay lại Bảng điều khiển
+          <span>Quay lại Bảng điều khiển</span>
         </Link>
 
         <div className="flex items-center gap-2">
@@ -219,7 +261,7 @@ export default function PostForm({ initialData, isEdit = false }: PostFormProps)
             className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md shadow-blue-500/20 disabled:opacity-50 transition-all"
           >
             <Save className="w-4 h-4" />
-            {loading ? 'Đang lưu...' : isEdit ? 'Cập Nhật Bài Viết' : 'Xuất Bản / Lưu Bài'}
+            <span>{loading ? 'Đang lưu...' : isEdit ? 'Cập Nhật' : 'Xuất Bản / Lưu Bài'}</span>
           </button>
         </div>
       </div>
@@ -239,19 +281,19 @@ export default function PostForm({ initialData, isEdit = false }: PostFormProps)
       )}
 
       {/* Main card */}
-      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-sm space-y-6">
+      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs space-y-6">
         
         {/* Tiêu đề */}
         <div>
           <label className="block text-xs font-bold uppercase text-slate-700 tracking-wider mb-1.5">
-            Tiêu đề bài viết *
+            Tiêu đề bài viết / Thông báo *
           </label>
           <input
             type="text"
             required
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Ví dụ: Đội tuyển STEM trường đạt giải Nhất Hội thi Khoa học Kỹ thuật 2026..."
+            placeholder={isNoticeCategory ? "Ví dụ: Thông báo Kế hoạch tổ chức Cuộc thi Sáng tạo KHKT 2026..." : "Ví dụ: Đội tuyển STEM đạt giải Nhất tại Hội thi Khoa học Kỹ thuật..."}
             className="w-full px-4 py-3 rounded-xl border border-slate-200 text-base font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
@@ -260,45 +302,96 @@ export default function PostForm({ initialData, isEdit = false }: PostFormProps)
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-bold uppercase text-slate-700 tracking-wider mb-1.5">
-              Chuyên mục *
+              Chuyên mục phân loại *
             </label>
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
             >
-              {CATEGORIES.filter(c => c.id !== 'Tat-ca').map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.label}
-                </option>
-              ))}
+              <optgroup label="Cổng Thông Báo Chính Quy">
+                <option value="Thong-bao">📢 Thông báo & Kế hoạch (Hiển thị Bảng Thông Báo)</option>
+              </optgroup>
+              <optgroup label="Kho Tin Tức & Nghiên Cứu">
+                {CATEGORIES.filter(c => c.id !== 'Tat-ca' && c.id !== 'Thong-bao').map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.label}
+                  </option>
+                ))}
+              </optgroup>
             </select>
           </div>
 
           <div>
             <label className="block text-xs font-bold uppercase text-slate-700 tracking-wider mb-1.5">
-              Tác giả / Ban thực hiện
+              Tác giả / Ban ban hành
             </label>
             <input
               type="text"
               value={author}
               onChange={(e) => setAuthor(e.target.value)}
-              placeholder="Ví dụ: Ban Truyền thông STEM, Thầy Cố vấn..."
+              placeholder="Ban Chủ nhiệm BSSRC, Ban Giám hiệu, Thầy Cố vấn..."
               className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
         </div>
 
-        {/* Tóm tắt ngắn */}
+        {/* 🔔 Đặc quyền cấu hình riêng cho THÔNG BÁO & GHIM CỔNG */}
+        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700">
+            <Pin className="w-4 h-4 text-blue-600" />
+            <span>Cấu hình Vị trí hiển thị trên Cổng Thông Tin</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+            <label className="flex items-center gap-2.5 p-3 rounded-xl bg-white border border-slate-200 cursor-pointer hover:border-blue-300 transition-colors">
+              <input
+                type="checkbox"
+                checked={featured}
+                onChange={(e) => setFeatured(e.target.checked)}
+                className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-xs font-bold text-slate-800">
+                Bài viết Tiêu điểm (Màn hình đầu)
+              </span>
+            </label>
+
+            <label className="flex items-center gap-2.5 p-3 rounded-xl bg-white border border-slate-200 cursor-pointer hover:border-red-300 transition-colors">
+              <input
+                type="checkbox"
+                checked={isPinned}
+                onChange={(e) => setIsPinned(e.target.checked)}
+                className="w-4 h-4 rounded text-red-600 focus:ring-red-500"
+              />
+              <span className="text-xs font-bold text-slate-800">
+                Ghim lên đầu Bảng thông báo
+              </span>
+            </label>
+
+            <label className="flex items-center gap-2.5 p-3 rounded-xl bg-white border border-slate-200 cursor-pointer hover:border-red-300 transition-colors">
+              <input
+                type="checkbox"
+                checked={isUrgent}
+                onChange={(e) => setIsUrgent(e.target.checked)}
+                className="w-4 h-4 rounded text-red-600 focus:ring-red-500"
+              />
+              <span className="text-xs font-bold text-red-700">
+                Thông báo khẩn (Nhãn đỏ)
+              </span>
+            </label>
+          </div>
+        </div>
+
+        {/* Tóm tắt ngắn (Excerpt / Sapo) */}
         <div>
           <label className="block text-xs font-bold uppercase text-slate-700 tracking-wider mb-1.5">
-            Tóm tắt ngắn (Excerpt)
+            Tóm tắt ngắn (Đoạn Sapo mở đầu bài viết)
           </label>
           <textarea
             rows={2}
             value={summary}
             onChange={(e) => setSummary(e.target.value)}
-            placeholder="Một đoạn mô tả ngắn 2-3 câu giới thiệu nhanh nội dung bài viết..."
+            placeholder="Một đoạn mô tả ngắn 2-3 câu giới thiệu nhanh nội dung bài viết hoặc thông báo..."
             className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
@@ -311,11 +404,10 @@ export default function PostForm({ initialData, isEdit = false }: PostFormProps)
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
             <div className="md:col-span-7 space-y-3">
-              {/* Option 1: Upload file */}
               <div className="flex items-center gap-3">
                 <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-bold border border-blue-200 transition-colors">
                   <Upload className="w-4 h-4" />
-                  {uploadingThumb ? 'Đang tải ảnh lên...' : 'Tải ảnh từ máy tính'}
+                  <span>{uploadingThumb ? 'Đang tải ảnh...' : 'Tải ảnh từ máy tính'}</span>
                   <input
                     type="file"
                     accept="image/*"
@@ -324,15 +416,14 @@ export default function PostForm({ initialData, isEdit = false }: PostFormProps)
                     className="hidden"
                   />
                 </label>
-                <span className="text-xs text-slate-400">hoặc</span>
+                <span className="text-xs text-slate-400">hoặc dán liên kết ảnh trực tiếp:</span>
               </div>
 
-              {/* Option 2: Enter URL */}
               <input
                 type="url"
                 value={thumbnail}
                 onChange={(e) => setThumbnail(e.target.value)}
-                placeholder="Dán đường link ảnh trực tiếp (https://...)"
+                placeholder="Dán đường link ảnh (https://...)"
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -341,6 +432,7 @@ export default function PostForm({ initialData, isEdit = false }: PostFormProps)
             <div className="md:col-span-5">
               {thumbnail ? (
                 <div className="relative aspect-[16/10] rounded-xl overflow-hidden border border-slate-200 bg-slate-50 group">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={thumbnail}
                     alt="Ảnh bìa xem thử"
@@ -358,115 +450,98 @@ export default function PostForm({ initialData, isEdit = false }: PostFormProps)
               ) : (
                 <div className="aspect-[16/10] rounded-xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 text-xs p-4 text-center">
                   <ImageIcon className="w-8 h-8 mb-1 stroke-1" />
-                  <span>Chưa chọn ảnh bìa</span>
+                  <span>Chưa có ảnh bìa</span>
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* 🎬 Gắn link Video YouTube */}
-        <div className="pt-4 border-t border-slate-100 space-y-3">
-          <div className="flex items-center justify-between">
-            <label className="block text-xs font-bold uppercase text-slate-700 tracking-wider">
-              Gắn Link Video YouTube (Tùy chọn)
-            </label>
-            {detectedYouTubeId && (
-              <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1">
-                <CheckCircle className="w-3.5 h-3.5" />
-                Hợp lệ: ID {detectedYouTubeId}
-              </span>
-            )}
-          </div>
-
-          <div className="relative">
-            <input
-              type="text"
-              value={youtubeUrl}
-              onChange={(e) => setYoutubeUrl(e.target.value)}
-              placeholder="Ví dụ: https://www.youtube.com/watch?v=... hoặc https://youtu.be/..."
-              className="w-full pl-10 pr-10 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-            />
-            <Video className="w-5 h-5 text-red-500 absolute left-3 top-1/2 -translate-y-1/2" />
+        {/* 🎬 Video YouTube đính kèm */}
+        <div className="pt-2 border-t border-slate-100 space-y-2">
+          <label className="block text-xs font-bold uppercase text-slate-700 tracking-wider">
+            Video YouTube Phóng Sự / Trực Nghiệm (Tùy chọn)
+          </label>
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <input
+                type="url"
+                value={youtubeUrl}
+                onChange={(e) => setYoutubeUrl(e.target.value)}
+                placeholder="Ví dụ: https://www.youtube.com/watch?v=7Pq-S557XQU"
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-red-500"
+              />
+              <Video className="w-4 h-4 text-red-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            </div>
             {youtubeUrl && (
               <button
                 type="button"
                 onClick={() => setYoutubeUrl('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                className="p-2 text-slate-400 hover:text-red-600"
               >
                 <X className="w-4 h-4" />
               </button>
             )}
           </div>
 
-          {/* Live YouTube Player Preview */}
-          {detectedYouTubeId ? (
-            <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
-              <span className="text-xs text-red-400 font-bold flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5" />
-                Xem thử Video YouTube trực tiếp:
-              </span>
-              <YouTubePlayer
-                youtubeId={detectedYouTubeId}
-                title={title || 'Xem thử video hoạt động CLB'}
-              />
+          {detectedYouTubeId && (
+            <div className="mt-3 max-w-sm rounded-xl overflow-hidden border border-slate-200 shadow-xs">
+              <YouTubePlayer youtubeId={detectedYouTubeId} title="Xem trước video YouTube" />
             </div>
-          ) : youtubeUrl ? (
-            <p className="text-xs text-amber-600 flex items-center gap-1">
-              <AlertCircle className="w-3.5 h-3.5" />
-              Đường dẫn chưa hợp lệ. Vui lòng kiểm tra lại link YouTube (dạng watch?v=, youtu.be/ hoặc shorts/).
-            </p>
-          ) : null}
+          )}
         </div>
 
-        {/* 📝 Nội dung bài viết */}
-        <div className="pt-4 border-t border-slate-100 space-y-3">
+        {/* 📝 Trình soạn thảo nội dung */}
+        <div className="pt-2 border-t border-slate-100 space-y-2">
           <div className="flex items-center justify-between">
             <label className="block text-xs font-bold uppercase text-slate-700 tracking-wider">
-              Nội dung bài viết *
+              Nội dung chi tiết bài viết *
             </label>
-            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-semibold">
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs font-semibold">
               <button
                 type="button"
                 onClick={() => setPreviewTab('edit')}
-                className={`px-3 py-1 rounded-lg transition-colors ${previewTab === 'edit' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600'}`}
+                className={`px-3 py-1 rounded-md transition-colors ${
+                  previewTab === 'edit' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-600'
+                }`}
               >
                 Soạn thảo
               </button>
               <button
                 type="button"
                 onClick={() => setPreviewTab('preview')}
-                className={`px-3 py-1 rounded-lg transition-colors ${previewTab === 'preview' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600'}`}
+                className={`px-3 py-1 rounded-md transition-colors ${
+                  previewTab === 'preview' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-600'
+                }`}
               >
                 Xem trước
               </button>
             </div>
           </div>
 
-          {/* Quick Toolbar */}
           {previewTab === 'edit' && (
-            <div className="flex items-center gap-1 p-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700">
+            <div className="flex items-center gap-1.5 p-1.5 bg-slate-100 rounded-xl border border-slate-200 text-xs text-slate-600">
               <button
                 type="button"
                 onClick={() => insertFormat('## ')}
                 className="p-1.5 rounded-lg hover:bg-slate-200 font-bold flex items-center gap-1"
-                title="Tiêu đề H2"
+                title="Tiêu đề mục lớn (Heading 2)"
               >
                 <Heading className="w-4 h-4" />
-                H2
+                <span>H2</span>
               </button>
               <button
                 type="button"
                 onClick={() => insertFormat('### ')}
                 className="p-1.5 rounded-lg hover:bg-slate-200 font-bold flex items-center gap-1"
-                title="Tiêu đề H3"
+                title="Tiêu đề mục con (Heading 3)"
               >
                 <Heading className="w-3.5 h-3.5" />
-                H3
+                <span>H3</span>
               </button>
               <button
                 type="button"
-                onClick={() => insertFormat('**', '**')}
+                onClick={() => insertFormat('**')}
                 className="p-1.5 rounded-lg hover:bg-slate-200 font-bold"
                 title="In đậm"
               >
@@ -520,6 +595,98 @@ export default function PostForm({ initialData, isEdit = false }: PostFormProps)
           )}
         </div>
 
+        {/* 📥 QUẢN LÝ TÀI LIỆU & BIỂU MẪU ĐÍNH KÈM (ATTACHMENTS) */}
+        <div className="pt-4 border-t border-slate-100 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="block text-xs font-bold uppercase text-slate-700 tracking-wider">
+                Tài Liệu & Biểu Mẫu Tải Về Đính Kèm ({attachments.length})
+              </label>
+              <p className="text-[11px] text-slate-500">
+                Đính kèm file PDF, Word hoặc Zip để học sinh tải về trực tiếp từ bài viết.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowAddAtt(!showAddAtt)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-bold border border-blue-200 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Thêm file</span>
+            </button>
+          </div>
+
+          {/* Form thêm attachment */}
+          {showAddAtt && (
+            <div className="p-4 rounded-xl bg-blue-50/60 border border-blue-200 space-y-3 animate-fadeIn">
+              <h5 className="text-xs font-bold text-blue-900">Thêm file đính kèm mới:</h5>
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                <div className="sm:col-span-5">
+                  <input
+                    type="text"
+                    value={newAttName}
+                    onChange={(e) => setNewAttName(e.target.value)}
+                    placeholder="Tên file (VD: Mau-dang-ky-de-tai.docx)"
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 bg-white"
+                  />
+                </div>
+                <div className="sm:col-span-4">
+                  <input
+                    type="text"
+                    value={newAttUrl}
+                    onChange={(e) => setNewAttUrl(e.target.value)}
+                    placeholder="Link tải về (URL file hoặc #)"
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 bg-white"
+                  />
+                </div>
+                <div className="sm:col-span-3 flex items-center gap-2">
+                  <select
+                    value={newAttType}
+                    onChange={(e) => setNewAttType(e.target.value)}
+                    className="px-2 py-2 text-xs rounded-lg border border-slate-200 bg-white font-bold"
+                  >
+                    <option value="PDF">PDF</option>
+                    <option value="DOCX">DOCX</option>
+                    <option value="ZIP">ZIP</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={handleAddAttachment}
+                    className="px-3 py-2 rounded-lg bg-blue-600 text-white font-bold text-xs hover:bg-blue-700 whitespace-nowrap"
+                  >
+                    Lưu
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Danh sách attachment hiện có */}
+          {attachments.length > 0 && (
+            <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden bg-white">
+              {attachments.map((att, idx) => (
+                <div key={idx} className="p-3 flex items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700">
+                      {att.type || 'FILE'}
+                    </span>
+                    <span className="font-semibold text-slate-800 truncate">{att.name}</span>
+                    <span className="text-slate-400 text-[11px]">({att.size || '1.0 MB'})</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveAttachment(idx)}
+                    className="text-slate-400 hover:text-red-600 p-1"
+                    title="Xóa file đính kèm"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* 🖼️ Bộ sưu tập ảnh phụ (Gallery) */}
         <div className="pt-4 border-t border-slate-100 space-y-3">
           <div className="flex items-center justify-between">
@@ -528,7 +695,7 @@ export default function PostForm({ initialData, isEdit = false }: PostFormProps)
             </label>
             <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-bold border border-blue-200 transition-colors">
               <Upload className="w-3.5 h-3.5" />
-              {uploadingGallery ? 'Đang tải...' : 'Thêm nhiều ảnh'}
+              <span>{uploadingGallery ? 'Đang tải...' : 'Thêm ảnh'}</span>
               <input
                 type="file"
                 multiple
@@ -544,6 +711,7 @@ export default function PostForm({ initialData, isEdit = false }: PostFormProps)
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
               {gallery.map((imgUrl, index) => (
                 <div key={index} className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 group">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={imgUrl} alt="" className="w-full h-full object-cover" />
                   <button
                     type="button"
@@ -559,35 +727,19 @@ export default function PostForm({ initialData, isEdit = false }: PostFormProps)
           )}
         </div>
 
-        {/* ⚙️ Cài đặt xuất bản & Nổi bật */}
-        <div className="pt-4 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-bold uppercase text-slate-700 tracking-wider mb-1.5">
-              Trạng thái bài viết
-            </label>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value as 'published' | 'draft')}
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-            >
-              <option value="published">Xuất bản ngay (Công khai cho người xem)</option>
-              <option value="draft">Lưu làm bản nháp (Chỉ admin xem được)</option>
-            </select>
-          </div>
-
-          <div className="flex items-center pt-6">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={featured}
-                onChange={(e) => setFeatured(e.target.checked)}
-                className="w-5 h-5 rounded text-blue-600 focus:ring-blue-500 border-slate-300"
-              />
-              <span className="text-sm font-bold text-slate-800">
-                Đặt làm bài viết nổi bật (Hiển thị đầu trang chủ)
-              </span>
-            </label>
-          </div>
+        {/* ⚙️ Cài đặt trạng thái xuất bản */}
+        <div className="pt-4 border-t border-slate-100">
+          <label className="block text-xs font-bold uppercase text-slate-700 tracking-wider mb-1.5">
+            Trạng thái bài viết / Thông báo
+          </label>
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value as 'published' | 'draft')}
+            className="w-full sm:w-80 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+          >
+            <option value="published">Xuất bản ngay (Công khai trên Cổng Thông Tin)</option>
+            <option value="draft">Lưu làm bản nháp (Chỉ Admin xem được)</option>
+          </select>
         </div>
 
       </div>
@@ -605,7 +757,7 @@ export default function PostForm({ initialData, isEdit = false }: PostFormProps)
           disabled={loading}
           className="px-8 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-lg shadow-blue-500/25 disabled:opacity-50 transition-all"
         >
-          {loading ? 'Đang xử lý...' : isEdit ? 'Cập Nhật Bài Viết' : 'Xuất Bản Bài Viết'}
+          {loading ? 'Đang xử lý...' : isEdit ? 'Cập Nhật Bài Viết' : 'Xuất Bản Ngay'}
         </button>
       </div>
 

@@ -2,7 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import { Post, CATEGORIES } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
-import { Calendar, Eye, PlayCircle, ArrowRight } from 'lucide-react';
+import { Calendar, Eye, PlayCircle, ArrowRight, FileText } from 'lucide-react';
 
 interface PostCardProps {
   post: Post;
@@ -18,11 +18,13 @@ export default function PostCard({ post, featured = false }: PostCardProps) {
   };
 
   const hasVideo = Boolean(post.youtubeUrl || post.youtubeId);
+  const hasFiles = Boolean(post.attachments && post.attachments.length > 0);
 
   if (featured) {
     return (
       <div className="group relative overflow-hidden rounded-3xl bg-white border border-slate-200/80 shadow-md hover:shadow-2xl transition-all duration-300 grid grid-cols-1 lg:grid-cols-12">
         <div className="relative lg:col-span-7 overflow-hidden aspect-[16/10] lg:aspect-auto">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={post.thumbnail}
             alt={post.title}
@@ -31,14 +33,25 @@ export default function PostCard({ post, featured = false }: PostCardProps) {
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 via-transparent to-transparent lg:hidden" />
           
           {/* Badge danh mục */}
-          <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
+          <div className="absolute top-4 left-4 z-10 flex items-center gap-2 flex-wrap">
             <span className={`px-3 py-1 rounded-full text-xs font-bold tracking-wide uppercase shadow-sm ${cat.bgColor} ${cat.color}`}>
               {cat.label}
             </span>
+            {post.isUrgent && (
+              <span className="px-2.5 py-1 rounded-full text-xs font-extrabold uppercase bg-red-600 text-white shadow-sm animate-pulse">
+                Khẩn
+              </span>
+            )}
             {hasVideo && (
               <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-600 text-white shadow-sm">
                 <PlayCircle className="w-3.5 h-3.5" />
                 Video
+              </span>
+            )}
+            {hasFiles && (
+              <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-600 text-white shadow-sm">
+                <FileText className="w-3.5 h-3.5" />
+                Tài liệu
               </span>
             )}
           </div>
@@ -46,14 +59,25 @@ export default function PostCard({ post, featured = false }: PostCardProps) {
 
         <div className="lg:col-span-5 p-6 sm:p-8 flex flex-col justify-between">
           <div>
-            <div className="hidden lg:flex items-center gap-2 mb-3">
+            <div className="hidden lg:flex items-center gap-2 mb-3 flex-wrap">
               <span className={`px-3 py-1 rounded-full text-xs font-bold tracking-wide uppercase ${cat.bgColor} ${cat.color}`}>
                 {cat.label}
               </span>
+              {post.isUrgent && (
+                <span className="px-2.5 py-1 rounded-full text-xs font-extrabold uppercase bg-red-600 text-white shadow-sm animate-pulse">
+                  Khẩn
+                </span>
+              )}
               {hasVideo && (
                 <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-600 text-white">
                   <PlayCircle className="w-3.5 h-3.5" />
                   Có video
+                </span>
+              )}
+              {hasFiles && (
+                <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
+                  <FileText className="w-3.5 h-3.5" />
+                  Kèm file
                 </span>
               )}
             </div>
@@ -98,30 +122,44 @@ export default function PostCard({ post, featured = false }: PostCardProps) {
   }
 
   return (
-    <div className="group flex flex-col overflow-hidden rounded-2xl bg-white border border-slate-200/80 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+    <div className="group flex flex-col overflow-hidden rounded-2xl bg-white border border-slate-200/80 shadow-xs hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5">
       {/* Thumbnail */}
       <div className="relative aspect-[16/10] overflow-hidden bg-slate-100">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={post.thumbnail}
           alt={post.title}
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
-        <div className="absolute top-3 left-3 flex items-center gap-2">
+        <div className="absolute top-3 left-3 flex items-center gap-1.5 flex-wrap">
           <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wide uppercase shadow-sm ${cat.bgColor} ${cat.color}`}>
             {cat.label}
           </span>
+          {post.isUrgent && (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-red-600 text-white shadow-sm">
+              Khẩn
+            </span>
+          )}
         </div>
 
-        {hasVideo && (
-          <div className="absolute bottom-3 right-3 flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-600/90 text-white shadow-md backdrop-blur-sm">
-            <PlayCircle className="w-3.5 h-3.5" />
-            Video
-          </div>
-        )}
+        <div className="absolute bottom-2.5 right-2.5 flex items-center gap-1">
+          {hasVideo && (
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-600/90 text-white shadow-md backdrop-blur-sm">
+              <PlayCircle className="w-3 h-3" />
+              Video
+            </div>
+          )}
+          {hasFiles && (
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-600/90 text-white shadow-md backdrop-blur-sm">
+              <FileText className="w-3 h-3" />
+              File
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Content */}
-      <div className="flex flex-1 flex-col justify-between p-5">
+      <div className="flex flex-1 flex-col justify-between p-4.5 sm:p-5">
         <div>
           <div className="flex items-center gap-3 text-xs text-slate-500 mb-2">
             <span className="flex items-center gap-1">
@@ -135,7 +173,7 @@ export default function PostCard({ post, featured = false }: PostCardProps) {
           </div>
 
           <Link href={`/posts/${post.slug}`}>
-            <h3 className="text-base sm:text-lg font-bold text-slate-900 group-hover:text-blue-600 transition-colors line-clamp-2">
+            <h3 className="text-base font-bold text-slate-900 group-hover:text-blue-600 transition-colors line-clamp-2 leading-snug">
               {post.title}
             </h3>
           </Link>
