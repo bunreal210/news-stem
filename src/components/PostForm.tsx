@@ -57,6 +57,7 @@ export default function PostForm({ initialData, isEdit = false, defaultCategory 
   const [newAttSize, setNewAttSize] = useState('1.5 MB');
   const [newAttType, setNewAttType] = useState('PDF');
   const [showAddAtt, setShowAddAtt] = useState(false);
+  const [uploadingAtt, setUploadingAtt] = useState(false);
 
   // UI states
   const [uploadingThumb, setUploadingThumb] = useState(false);
@@ -67,6 +68,165 @@ export default function PostForm({ initialData, isEdit = false, defaultCategory 
   const [success, setSuccess] = useState('');
   const [isAuthValid, setIsAuthValid] = useState<boolean | null>(null);
   const [isD1Connected, setIsD1Connected] = useState<boolean | null>(null);
+
+  // Tự động nén ảnh trên trình duyệt trước khi tải lên (giảm dung lượng, tăng tốc độ)
+  const compressImageFile = async (file: File, maxWidth = 1600, quality = 0.85): Promise<File> => {
+    if (!file.type.startsWith('image/') || file.type === 'image/svg+xml' || file.type === 'image/gif') {
+      return file;
+    }
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(file);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          canvas.toBlob(
+            (blob) => {
+              if (blob && blob.size < file.size) {
+                const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, '.jpg'), {
+                  type: 'image/jpeg',
+                  lastModified: Date.now(),
+                });
+                resolve(compressedFile);
+              } else {
+                resolve(file);
+              }
+            },
+            'image/jpeg',
+            quality
+          );
+        };
+        img.onerror = () => resolve(file);
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => resolve(file);
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Live extracted YouTube ID
+  const detectedYouTubeId = extractYouTubeId(youtubeUrl);
+
+  // Xử lý upload ảnh bìa từ máy tính
+  const handleThumbnailUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingThumb(true);
+    setError('');
+
+    try {
+      const processedFile = await compressImageFile(file);
+      const formData = new FormData();
+      formData.append('file', processedFile);
+
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'Upload ảnh thất bại.');
+      } else {
+        setThumbnail(data.url);
+      }
+    } catch {
+      setError('Lỗi khi tải ảnh lên máy chủ.');
+    } finally {
+      setUploadingThumb(false);
+      e.target.value = '';
+    }
+  };
+
+  // Xử lý upload ảnh vào Gallery
+  const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setUploadingGallery(true);
+    setError('');
+
+    const newUrls: string[] = [];
+
+    for (let i = 0; i < files.length; i++) {
+      try {
+        const processedFile = await compressImageFile(files[i]);
+        const formData = new FormData();
+        formData.append('file', processedFile);
+
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
+        const data = await res.json();
+        if (res.ok && data.url) {
+          newUrls.push(data.url);
+        }
+      } catch {
+        // tiếp tục file kế tiếp
+      }
+    }
+
+    if (newUrls.length > 0) {
+      setGallery((prev) => [...prev, ...newUrls]);
+    }
+    setUploadingGallery(false);
+    e.target.value = '';
+  };
+
+  // Xử lý upload file đính kèm từ máy tính (PDF, Word, Excel, ZIP...)
+  const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingAtt(true);
+    setError('');
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || 'Tải file đính kèm thất bại.');
+      } else {
+        setAttachments((prev) => [
+          ...prev,
+          {
+            name: data.originalName || file.name,
+            url: data.url,
+            size: data.size || '1.0 MB',
+            type: (data.fileType || 'FILE').toUpperCase(),
+          },
+        ]);
+        setShowAddAtt(false);
+      }
+    } catch {
+      setError('Lỗi khi tải file đính kèm lên máy chủ.');
+    } finally {
+      setUploadingAtt(false);
+      e.target.value = '';
+    }
+  };
 
   // Kiểm tra phiên đăng nhập admin và kết nối D1 khi mở form
   useEffect(() => {
@@ -86,72 +246,6 @@ export default function PostForm({ initialData, isEdit = false, defaultCategory 
       })
       .catch(() => {});
   }, []);
-
-  // Live extracted YouTube ID
-  const detectedYouTubeId = extractYouTubeId(youtubeUrl);
-
-  // Xử lý upload ảnh bìa
-  const handleThumbnailUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setUploadingThumb(true);
-    setError('');
-
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-      const res = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || 'Upload ảnh thất bại.');
-      } else {
-        setThumbnail(data.url);
-      }
-    } catch {
-      setError('Lỗi khi tải ảnh lên.');
-    } finally {
-      setUploadingThumb(false);
-    }
-  };
-
-  // Xử lý upload ảnh vào Gallery
-  const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    setUploadingGallery(true);
-    setError('');
-
-    const newUrls: string[] = [];
-
-    for (let i = 0; i < files.length; i++) {
-      const formData = new FormData();
-      formData.append('file', files[i]);
-
-      try {
-        const res = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData,
-        });
-        const data = await res.json();
-        if (res.ok && data.url) {
-          newUrls.push(data.url);
-        }
-      } catch {
-        // continue with other files
-      }
-    }
-
-    if (newUrls.length > 0) {
-      setGallery((prev) => [...prev, ...newUrls]);
-    }
-    setUploadingGallery(false);
-  };
 
   const removeGalleryImage = (indexToRemove: number) => {
     setGallery((prev) => prev.filter((_, i) => i !== indexToRemove));
@@ -690,14 +784,30 @@ export default function PostForm({ initialData, isEdit = false, defaultCategory 
                 Đính kèm file PDF, Word hoặc Zip để học sinh tải về trực tiếp từ bài viết.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowAddAtt(!showAddAtt)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-bold border border-blue-200 transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Thêm file</span>
-            </button>
+            <div className="flex items-center gap-2">
+              {/* Tải file trực tiếp từ máy tính */}
+              <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-all">
+                <Upload className="w-3.5 h-3.5" />
+                <span>{uploadingAtt ? 'Đang tải lên...' : 'Tải file từ máy'}</span>
+                <input
+                  type="file"
+                  className="hidden"
+                  disabled={uploadingAtt}
+                  onChange={handleAttachmentUpload}
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.7z,.txt,.csv"
+                />
+              </label>
+
+              {/* Thêm liên kết thủ công */}
+              <button
+                type="button"
+                onClick={() => setShowAddAtt(!showAddAtt)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-bold border border-slate-200 transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Nhập link thủ công</span>
+              </button>
+            </div>
           </div>
 
           {/* Form thêm attachment */}

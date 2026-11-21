@@ -29,7 +29,8 @@ import {
   Filter,
   Sparkles,
   Layers,
-  Check
+  Check,
+  Upload
 } from 'lucide-react';
 
 export default function AdminDashboardPage() {
@@ -57,6 +58,8 @@ export default function AdminDashboardPage() {
   const [docFileSize, setDocFileSize] = useState('1.5 MB');
   const [docUrl, setDocUrl] = useState('#');
   const [addingDoc, setAddingDoc] = useState(false);
+  const [uploadingDocFile, setUploadingDocFile] = useState(false);
+  const [docUploadSuccess, setDocUploadSuccess] = useState('');
 
   // D1 Database Connection Status
   const [d1Status, setD1Status] = useState<'checking' | 'connected' | 'disconnected'>('checking');
@@ -170,6 +173,49 @@ export default function AdminDashboardPage() {
       alert('Lỗi kết nối khi thêm văn bản.');
     } finally {
       setAddingDoc(false);
+    }
+  };
+
+  // Tải tệp văn bản từ máy tính lên Cloudflare R2 / D1
+  const handleDocFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingDocFile(true);
+    setDocUploadSuccess('');
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(data.error || 'Tải tệp thất bại.');
+      } else {
+        const ext = file.name.split('.').pop()?.toUpperCase() || 'PDF';
+        const rawName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+
+        if (!docTitle.trim()) {
+          setDocTitle(rawName);
+        }
+        if (!docCode.trim()) {
+          setDocCode(`VB-${Date.now().toString().slice(-4)}`);
+        }
+        setDocFileType(['PDF', 'DOCX', 'ZIP', 'XLSX'].includes(ext) ? ext : 'PDF');
+        setDocFileSize(data.size || '1.0 MB');
+        setDocUrl(data.url);
+        setDocUploadSuccess(`Đã tải lên: ${file.name} (${data.size || ''})`);
+      }
+    } catch {
+      alert('Lỗi kết nối khi tải tệp lên máy chủ.');
+    } finally {
+      setUploadingDocFile(false);
+      e.target.value = '';
     }
   };
 
@@ -939,6 +985,33 @@ export default function AdminDashboardPage() {
               <button onClick={() => setShowAddDocModal(false)} className="text-slate-400 hover:text-slate-600">
                 <X className="w-5 h-5" />
               </button>
+            </div>
+
+            {/* Khu vực Tải Tệp Trực Tiếp Từ Máy Tính */}
+            <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200 space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-emerald-950 block">Tải tệp trực tiếp từ máy tính</span>
+                  <span className="text-[11px] text-emerald-700">Tự động điền tên, định dạng, dung lượng và URL</span>
+                </div>
+                <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-all">
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>{uploadingDocFile ? 'Đang tải...' : 'Chọn tệp'}</span>
+                  <input
+                    type="file"
+                    className="hidden"
+                    disabled={uploadingDocFile}
+                    onChange={handleDocFileUpload}
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.7z,.txt,.csv"
+                  />
+                </label>
+              </div>
+              {docUploadSuccess && (
+                <div className="text-[11px] text-emerald-800 font-semibold bg-white/90 px-2.5 py-1.5 rounded-lg border border-emerald-200 flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span className="truncate">{docUploadSuccess}</span>
+                </div>
+              )}
             </div>
 
             <form onSubmit={handleAddDocument} className="space-y-3.5 text-xs">

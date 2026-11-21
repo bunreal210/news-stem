@@ -171,12 +171,25 @@ async function ensureD1Tables(d1: any) {
       );
     `).run();
 
-    // 4. Tạo chỉ mục tối ưu tìm kiếm
+    // 4. Tạo bảng media_files nếu chưa có (lưu file và ảnh đính kèm khi chưa có R2)
+    await d1.prepare(`
+      CREATE TABLE IF NOT EXISTS media_files (
+        id TEXT PRIMARY KEY,
+        filename TEXT UNIQUE NOT NULL,
+        mime_type TEXT NOT NULL,
+        size_bytes INTEGER DEFAULT 0,
+        data TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now'))
+      );
+    `).run();
+
+    // 5. Tạo chỉ mục tối ưu tìm kiếm
     try {
       await d1.prepare('CREATE INDEX IF NOT EXISTS idx_posts_slug ON posts(slug)').run();
       await d1.prepare('CREATE INDEX IF NOT EXISTS idx_posts_category ON posts(category)').run();
       await d1.prepare('CREATE INDEX IF NOT EXISTS idx_posts_status ON posts(status)').run();
       await d1.prepare('CREATE INDEX IF NOT EXISTS idx_documents_category ON documents(category)').run();
+      await d1.prepare('CREATE INDEX IF NOT EXISTS idx_media_filename ON media_files(filename)').run();
     } catch {}
 
     d1Initialized = true;
