@@ -230,7 +230,7 @@ export default function PostForm({ initialData, isEdit = false, defaultCategory 
       title: title.trim(),
       summary: summary.trim(),
       category,
-      thumbnail: thumbnail.trim() || 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80',
+      thumbnail: thumbnail.trim(),
       youtubeUrl: youtubeUrl.trim(),
       content: content.trim(),
       gallery,

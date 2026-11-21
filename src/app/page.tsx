@@ -89,13 +89,19 @@ export default async function HomePage() {
             {leadPost ? (
               <article className="group bg-white rounded-2xl border border-slate-200/90 overflow-hidden shadow-xs hover:border-blue-300 hover:shadow-md transition-all">
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-0">
-                  <div className="md:col-span-7 relative overflow-hidden aspect-[16/10] md:aspect-auto">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={leadPost.thumbnail}
-                      alt={leadPost.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
+                  <div className="md:col-span-7 relative overflow-hidden aspect-[16/10] md:aspect-auto bg-slate-100">
+                    {leadPost.thumbnail && leadPost.thumbnail.trim() !== '' ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img
+                        src={leadPost.thumbnail}
+                        alt={leadPost.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+                    ) : (
+                      <div className="w-full h-full min-h-[220px] flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50/40 to-slate-100 text-blue-300">
+                        <Newspaper className="w-16 h-16 text-blue-200" />
+                      </div>
+                    )}
                     <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-blue-600 text-white text-[11px] font-bold uppercase shadow-sm">
                       Tiêu điểm
                     </span>
@@ -151,13 +157,19 @@ export default async function HomePage() {
                   className="group bg-white rounded-xl border border-slate-200/90 overflow-hidden shadow-2xs hover:border-blue-300 hover:shadow-md transition-all flex flex-col justify-between"
                 >
                   <div>
-                    <div className="relative aspect-[16/10] overflow-hidden">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={post.thumbnail}
-                        alt={post.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      />
+                    <div className="relative aspect-[16/10] overflow-hidden bg-slate-100">
+                      {post.thumbnail && post.thumbnail.trim() !== '' ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img
+                          src={post.thumbnail}
+                          alt={post.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-100 to-blue-50/50 text-slate-300">
+                          <Newspaper className="w-8 h-8" />
+                        </div>
+                      )}
                     </div>
                     <div className="p-3.5">
                       <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mb-1.5">
@@ -340,13 +352,19 @@ export default async function HomePage() {
               {remainingNewsPosts.slice(0, 6).map((post) => (
                 <article key={post.id} className="group flex flex-col justify-between rounded-xl border border-slate-100 hover:border-blue-200 p-3 transition-colors bg-slate-50/40">
                   <div>
-                    <div className="relative aspect-[16/10] rounded-lg overflow-hidden mb-3 border border-slate-200/60">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={post.thumbnail}
-                        alt={post.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      />
+                    <div className="relative aspect-[16/10] rounded-lg overflow-hidden mb-3 border border-slate-200/60 bg-slate-100">
+                      {post.thumbnail && post.thumbnail.trim() !== '' ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img
+                          src={post.thumbnail}
+                          alt={post.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-100 to-blue-50/40 text-slate-300">
+                          <Newspaper className="w-8 h-8" />
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-2 text-[11px] text-slate-500 mb-1.5">

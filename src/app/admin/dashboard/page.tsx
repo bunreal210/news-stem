@@ -768,9 +768,13 @@ export default function AdminDashboardPage() {
                         
                         <td className="py-3.5 px-4">
                           <div className="flex items-start gap-3">
-                            <div className="w-14 h-10 rounded-lg overflow-hidden shrink-0 border border-slate-200 hidden sm:block bg-slate-100">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={post.thumbnail} alt="" className="w-full h-full object-cover" />
+                            <div className="w-14 h-10 rounded-lg overflow-hidden shrink-0 border border-slate-200 hidden sm:flex items-center justify-center bg-slate-100">
+                              {post.thumbnail && post.thumbnail.trim() !== '' ? (
+                                /* eslint-disable-next-line @next/next/no-img-element */
+                                <img src={post.thumbnail} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <FileText className="w-4 h-4 text-slate-400" />
+                              )}
                             </div>
                             <div className="min-w-0">
                               <div className="flex items-center gap-1.5 flex-wrap mb-1">

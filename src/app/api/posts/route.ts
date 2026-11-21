@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
       summary: summary || '',
       content,
       category,
-      thumbnail: thumbnail || 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80',
+      thumbnail: thumbnail ? thumbnail.trim() : '',
       youtubeUrl: youtubeUrl || '',
       gallery: gallery || [],
       author: author || 'CLB STEM',
